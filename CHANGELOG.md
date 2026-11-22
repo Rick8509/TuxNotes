@@ -63,6 +63,7 @@ All notable changes to TuxNotes are listed here.
 - If a note contains something the running version can't show (for example, a note written by a newer TuxNotes), it opens **read-only** with its text visible, so it can't be overwritten by mistake.
 
 ### Compatibility
+- **New app ID: `io.github.Rick8509.TuxNotes`** (was `io.github.tuxnotes.TuxNotes`). Notes, attachments, settings and window size move to the new folders by themselves the first time this version starts (`~/.local/share/io.github.Rick8509.TuxNotes/` and `~/.config/io.github.Rick8509.TuxNotes/`), and keyring entries move the first time they're used. If the old version is still open, TuxNotes asks you to close it first.
 - Notes created with "New notes start with: Heading" or "Body" open read-only in TuxNotes builds from before this version (notes with the default Title look are unaffected).
 - Backups now use **format 2**, which includes attachments. Older backups (format 1) still restore normally.
 - Once this version has opened your notes, its database (schema 4) can't be opened by earlier TuxNotes builds. Update every computer you use.

@@ -358,9 +358,9 @@ Object.assign(handlers, {
   backup_status: status,
   app_info: () => ({
     version: "0.1.0 (browser preview)",
-    dataDir: "~/.local/share/io.github.tuxnotes.TuxNotes",
-    database: "~/.local/share/io.github.tuxnotes.TuxNotes/notes.db",
-    configDir: "~/.config/io.github.tuxnotes.TuxNotes",
+    dataDir: "~/.local/share/io.github.Rick8509.TuxNotes",
+    database: "~/.local/share/io.github.Rick8509.TuxNotes/notes.db",
+    configDir: "~/.config/io.github.Rick8509.TuxNotes",
   }),
   set_backup_preferences: ({ autoBackup, keepBackups, backupOnClose }: Args) => {
     Object.assign(backup, { autoBackup, keepBackups: Math.min(100, Math.max(1, keepBackups)), backupOnClose });

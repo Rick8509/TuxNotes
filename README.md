@@ -49,9 +49,9 @@
 
 ## Where are my notes?
 
-Everything is stored locally in `~/.local/share/io.github.tuxnotes.TuxNotes/`: `notes.db` (SQLite) and an `attachments/` folder for images and files. Settings live in `~/.config/io.github.tuxnotes.TuxNotes/settings.json`.
+Everything is stored locally in `~/.local/share/io.github.Rick8509.TuxNotes/`: `notes.db` (SQLite) and an `attachments/` folder for images and files. Settings live in `~/.config/io.github.Rick8509.TuxNotes/settings.json`.
 
-Before a restore, TuxNotes saves a copy of your current notes in `~/.local/share/io.github.tuxnotes.TuxNotes/safety/`.
+Before a restore, TuxNotes saves a copy of your current notes in `~/.local/share/io.github.Rick8509.TuxNotes/safety/`.
 
 ## Locked notes
 
@@ -113,7 +113,7 @@ Packages are written to `target/release/bundle/<format>/`. To install or update 
 sudo apt install ./target/release/bundle/deb/TuxNotes_*_amd64.deb
 ```
 
-Rebuilding or reinstalling never touches your notes, which live in `~/.local/share/io.github.tuxnotes.TuxNotes/`.
+Rebuilding or reinstalling never touches your notes, which live in `~/.local/share/io.github.Rick8509.TuxNotes/`.
 
 ### Working on the UI without Rust
 

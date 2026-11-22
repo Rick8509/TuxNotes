@@ -10,7 +10,9 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-const SERVICE: &str = "io.github.tuxnotes.TuxNotes";
+const SERVICE: &str = "io.github.Rick8509.TuxNotes";
+/// Where secrets were stored before the app ID changed; moved on first use.
+const LEGACY_SERVICE: &str = crate::legacy_id::LEGACY_ID;
 const ACCOUNT: &str = "google-drive-refresh-token";
 /// Key derived from the backup password (never the password itself).
 pub const BACKUP_KEY_ACCOUNT: &str = "backup-encryption-key";
@@ -38,10 +40,25 @@ impl TokenVault {
         keyring::Entry::new(SERVICE, self.account)
     }
 
+    /// A secret saved under the old app ID: move it to the current one.
+    fn take_legacy(&self) -> Option<String> {
+        let legacy = keyring::Entry::new(LEGACY_SERVICE, self.account).ok()?;
+        let secret = legacy.get_password().ok()?;
+        if self.entry().and_then(|e| e.set_password(&secret)).is_ok() {
+            let _ = legacy.delete_credential();
+            log::info!("moved {} to the new app ID in the keyring", self.account);
+        }
+        Some(secret)
+    }
+
     pub fn load(&self) -> Option<String> {
         match self.entry().and_then(|e| e.get_password()) {
             Ok(token) => return Some(token),
-            Err(keyring::Error::NoEntry) => {}
+            Err(keyring::Error::NoEntry) => {
+                if let Some(secret) = self.take_legacy() {
+                    return Some(secret);
+                }
+            }
             Err(e) => log::warn!("keyring unavailable ({e}); checking fallback file"),
         }
         fs::read_to_string(&self.fallback_path)
@@ -71,6 +88,9 @@ impl TokenVault {
         match self.entry().and_then(|e| e.delete_credential()) {
             Ok(()) | Err(keyring::Error::NoEntry) => {}
             Err(e) => log::warn!("could not remove {} from keyring: {e}", self.account),
+        }
+        if let Ok(legacy) = keyring::Entry::new(LEGACY_SERVICE, self.account) {
+            let _ = legacy.delete_credential();
         }
         let _ = fs::remove_file(&self.fallback_path);
     }

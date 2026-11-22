@@ -3,7 +3,7 @@
   "productName": "TuxNotes",
   "mainBinaryName": "tuxnotes",
   "version": "../package.json",
-  "identifier": "io.github.tuxnotes.TuxNotes",
+  "identifier": "io.github.Rick8509.TuxNotes",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

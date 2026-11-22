@@ -420,7 +420,7 @@
         <p>This copy of TuxNotes was built without Google sign-in. Official releases include it.</p>
         <p class="small muted">
           Built it yourself? Save your Google client file as
-          <code>~/.config/io.github.tuxnotes.TuxNotes/google-client.json</code> and reopen TuxNotes
+          <code>~/.config/io.github.Rick8509.TuxNotes/google-client.json</code> and reopen TuxNotes
           (see <code>docs/google-setup.md</code>).
         </p>
       </div>

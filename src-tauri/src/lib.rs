@@ -4,6 +4,7 @@ mod commands;
 mod credentials;
 mod export;
 mod google_client;
+mod legacy_id;
 mod settings;
 
 use std::sync::Mutex;
@@ -30,6 +31,14 @@ const AUTO_BACKUP_INITIAL_DELAY: Duration = Duration::from_secs(90);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    let context = tauri::generate_context!();
+    // Before anything opens the data folders: bring them over from the old app ID.
+    if !legacy_id::migrate(&context.config().identifier) {
+        #[cfg(target_os = "linux")]
+        legacy_id::ask_to_close_old_version();
+        return;
+    }
 
     tauri::Builder::default()
         // Must be first: a second launch just focuses the running window.
@@ -143,7 +152,7 @@ pub fn run() {
             export::print_note,
             export::export_pdf,
         ])
-        .run(tauri::generate_context!())
+        .run(context)
         .expect("error while running TuxNotes");
 }
 

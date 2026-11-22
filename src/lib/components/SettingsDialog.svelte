@@ -9,7 +9,7 @@
   import type { AppInfo } from "../types";
   import BackupPanel, { type BackupView } from "./BackupPanel.svelte";
 
-  const REPO_URL = "https://github.com/Rick8509/tuxnotes";
+  const REPO_URL = "https://github.com/Rick8509/TuxNotes";
 
   const sections: { id: SettingsSection; label: string; icon: typeof Cloud }[] = [
     { id: "general", label: "General", icon: SlidersHorizontal },

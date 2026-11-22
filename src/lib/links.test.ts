@@ -10,7 +10,7 @@ describe("normalizeUrl", () => {
   });
   it("adds the missing part for bare domains and emails", () => {
     expect(normalizeUrl("tuxnotes.org")).toBe("https://tuxnotes.org");
-    expect(normalizeUrl("github.com/Rick8509/tuxnotes")).toBe("https://github.com/Rick8509/tuxnotes");
+    expect(normalizeUrl("github.com/Rick8509/TuxNotes")).toBe("https://github.com/Rick8509/TuxNotes");
     expect(normalizeUrl("example.com:8443/x")).toBe("https://example.com:8443/x");
     expect(normalizeUrl("localhost:3000")).toBe("https://localhost:3000");
     expect(normalizeUrl("me@example.com")).toBe("mailto:me@example.com");

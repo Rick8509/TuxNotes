@@ -1,0 +1,42 @@
+# Weekly dependency updates as a few bundled pull requests into dev.
+# Minor and patch updates come together per ecosystem; major updates (which can
+# break things) come one by one so they can be checked separately.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      npm:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "Update npm packages"
+
+  - package-ecosystem: cargo
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      cargo:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "Update Rust crates"
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "Update GitHub Actions"

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Release helper, used by the Release and Publish workflows (see docs/RELEASING.md).
+// Release helper, used by the "Release step 1: prepare" and "Release step 2: build and
+// publish" workflows (see docs/RELEASING.md).
 //
 //   node scripts/release.mjs prepare <patch|minor|major|keep|X.Y.Z> [--date YYYY-MM-DD] [--notes-out FILE] [--dry-run]
 //       Raise the version everywhere (package.json, package-lock.json, Cargo.toml,

@@ -5,7 +5,7 @@
 //!    at runtime (handy for development).
 //! 2. `google-client.json` in the TuxNotes config directory — the JSON file Google Cloud
 //!    lets you download for the client, used as-is (for people who build TuxNotes themselves).
-//! 3. The client compiled into release builds from CI secrets.
+//! 3. The client compiled into release builds from GitHub repository secrets.
 
 use std::path::Path;
 

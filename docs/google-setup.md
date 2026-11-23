@@ -44,7 +44,7 @@ Users never see or type these values. TuxNotes looks for the client in this orde
 1. In the GitHub repository, go to **Settings → Secrets and variables → Actions** and add:
    - `TUXNOTES_GOOGLE_CLIENT_ID`
    - `TUXNOTES_GOOGLE_CLIENT_SECRET`
-2. That's all: the Publish workflow (`.github/workflows/publish.yml`) passes them to the build, so the next release includes Google sign-in. Releases built without them show "Google Drive backup isn't available" in Settings → Backup.
+2. That's all: the **Release step 2: build and publish** workflow (`.github/workflows/release-publish.yml`) passes them to the build, so the next release includes Google sign-in. Releases built without them show "Google Drive backup isn't available" in Settings → Backup.
 
 If no client is found, the Backup window explains that Google Drive backup isn't available in that copy of TuxNotes.
 

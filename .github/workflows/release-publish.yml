@@ -1,11 +1,11 @@
-name: Publish
+name: "Release step 2: build and publish"
 
 # Step 2 of a release (docs/RELEASING.md): runs when the "Release vX.Y.Z" pull request
 # is merged into main. Builds the .deb, .rpm and AppImage, adds checksums and a signed
 # record of the build, tags the version and publishes the GitHub Release with the
 # changelog notes. Nothing is published unless every step before it succeeded.
 #
-# Test run: Actions → Publish → Run workflow (from dev) builds the packages without
+# Test run: Actions → "Release step 2: build and publish" → Run workflow (from dev) builds the packages without
 # publishing anything; they're attached to the run as "packages".
 on:
   push:
@@ -160,7 +160,7 @@ jobs:
             echo "---"
             echo "Checksums are in \`SHA256SUMS.txt\`. Each package has a signed record that it was built here: \`gh attestation verify <file> --repo $GITHUB_REPOSITORY\`."
           } > "$RUNNER_TEMP/notes.md"
-      - name: Publish
+      - name: "Release step 2: build and publish"
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.plan.outputs.version }}

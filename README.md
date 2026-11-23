@@ -1,7 +1,7 @@
 # TuxNotes
 
 [![Latest release](https://img.shields.io/github/v/release/Rick8509/TuxNotes?include_prereleases&label=release)](https://github.com/Rick8509/TuxNotes/releases/latest)
-[![CI](https://github.com/Rick8509/TuxNotes/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Rick8509/TuxNotes/actions/workflows/ci.yml)
+[![Checks](https://github.com/Rick8509/TuxNotes/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Rick8509/TuxNotes/actions/workflows/checks.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 **Open notes for Linux.** A lightweight, local-first notes app with a clean three-pane design inspired by Apple Notes.
@@ -158,7 +158,7 @@ src/                    Svelte 5 + TipTap user interface
 
 ## Development checks
 
-Run these before committing. CI runs the same checks on every push to `dev` and `main` and on pull requests. Pull requests go to `dev`; `main` only receives releases.
+Run these before committing. GitHub runs the same checks (the **Checks** workflow) on every push to `dev` and `main` and on pull requests. Pull requests go to `dev`; `main` only receives releases.
 
 ```bash
 cargo fmt --all                   # format Rust code
@@ -172,7 +172,7 @@ The browser tests drive the app in Google Chrome or Chromium with the mock backe
 
 ## Releasing
 
-Releases are published from GitHub with one click: **Actions → Release → Run workflow**, then merge the pull request it opens. The packages are built, signed and published automatically. The full playbook, including test runs and what to do when something fails, is in [docs/RELEASING.md](docs/RELEASING.md).
+Releases are published from GitHub with one click: **Actions → Release step 1: prepare → Run workflow**, then merge the pull request it opens. The packages are built, signed and published automatically. The full playbook, including test runs and what to do when something fails, is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Roadmap
 

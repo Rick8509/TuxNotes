@@ -9,7 +9,7 @@ export function parseVersion(v) {
   const m = VERSION.exec(v);
   if (!m) {
     const hint = /^\d+\.\d+\.\d+-/.test(v)
-      ? " Pre-release versions such as 1.0.0-beta.1 aren't used: Linux packages would treat them as newer than 1.0.0. For a test version, use a test run of the Publish workflow (docs/RELEASING.md)."
+      ? " Pre-release versions such as 1.0.0-beta.1 aren't used: Linux packages would treat them as newer than 1.0.0. For a test version, use a test run of \"Release step 2: build and publish\" (docs/RELEASING.md)."
       : "";
     throw new Error(`"${v}" isn't a version like 1.2.3.${hint}`);
   }

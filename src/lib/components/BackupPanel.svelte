@@ -417,7 +417,11 @@
       <div class="hero">
         <div class="badge muted"><CircleAlert size={26} /></div>
         <h3>Google Drive backup isn't available</h3>
-        <p>This copy of TuxNotes was built without Google sign-in. Official releases include it.</p>
+        <p>This copy of TuxNotes was built without Google sign-in, so it can't back up to Google Drive yet.</p>
+        <p class="small muted">
+          Your notes are saved on this computer. To keep a copy elsewhere, copy the folder
+          <code>~/.local/share/io.github.Rick8509.TuxNotes</code> while TuxNotes is closed.
+        </p>
         <p class="small muted">
           Built it yourself? Save your Google client file as
           <code>~/.config/io.github.Rick8509.TuxNotes/google-client.json</code> and reopen TuxNotes

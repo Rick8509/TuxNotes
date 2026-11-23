@@ -42,7 +42,7 @@ Run the command in the folder you downloaded to (usually `cd ~/Downloads` first)
 - **Undo** right after deleting a note, **duplicate** notes, and **Note Info** (word count, dates, folder)
 - **Password-locked notes**: lock any note from its ⋯ menu; its text is encrypted until you enter the password (see [Locked notes](#locked-notes))
 - Fast full-text search that ignores accents ("cafe" finds "café"); matches are highlighted in the open note, and **Find in note** (`Ctrl+F`) steps through matches
-- **Google Drive backup and restore**: manual or automatic (daily/weekly), keeps the last N backups, and restores on any computer. TuxNotes can only see files it created.
+- **Google Drive backup and restore**: manual or automatic (daily/weekly), keeps the last N backups, and restores on any computer. TuxNotes can only see files it created. *Not in the release builds yet; see [Google Drive backup](#google-drive-backup).*
 - Rounded, borderless window. Hide the sidebar, use focus mode to hide both side panes, and drag the dividers to resize them; the window remembers its size and layout
 - Notes grouped like Apple Notes (Pinned, Today, Yesterday, Previous 7 Days, …); drag a note onto a folder to move it
 - **Settings** (`Ctrl+,`): sort notes by date edited, date created or title; date grouping on or off; how new notes start; System, Light or Dark theme; editor text size
@@ -97,7 +97,9 @@ Open **Settings** (the gear at the bottom of the sidebar, or `Ctrl+,`) → **Bac
 - **Encrypt backups** (Settings → Backup): backups are encrypted on your computer before they're uploaded (XChaCha20-Poly1305, with the key derived from your password by Argon2id). TuxNotes keeps that key in your system keyring so automatic backups keep working; the password itself is never stored. Restoring on another computer asks for the password. Encrypted backups don't even show how many notes they hold. **A forgotten backup password can't be recovered.**
 - **Back up when closing** (on by default): if anything changed since the last backup, closing TuxNotes hides the window right away and finishes a backup first (for up to 90 seconds).
 
-Release builds come with Google sign-in built in. If you build TuxNotes yourself, see [docs/google-setup.md](docs/google-setup.md) to create your own (free) Google OAuth client.
+> **Not in the release builds yet.** Google sign-in needs a Google Cloud project for TuxNotes, which isn't set up yet, so the downloads from the Releases page show "Google Drive backup isn't available" in Settings → Backup. It will come in a later version. Until then, back up by copying `~/.local/share/io.github.Rick8509.TuxNotes/` while TuxNotes is closed.
+
+To use Drive backup now, build TuxNotes yourself with your own (free) Google OAuth client: see [docs/google-setup.md](docs/google-setup.md).
 
 ## Building from source
 

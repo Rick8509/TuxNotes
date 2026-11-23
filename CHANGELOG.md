@@ -4,6 +4,8 @@ All notable changes to TuxNotes are listed here.
 
 ## Unreleased
 
+## 0.1.0 - 2026-11-23
+
 ### Added
 - **Encrypted backups.** Settings → Backup → **Encrypt backups**: backups are encrypted on this computer before upload (XChaCha20-Poly1305 in authenticated 1 MiB chunks, so tampering or a cut-off file is detected; key from the password via Argon2id, salt and settings stored in the file). The derived key is kept in the system keyring so automatic backups keep working; the password isn't stored. Restoring asks for the password when this computer doesn't have the key, and restoring an encrypted backup on a computer that doesn't encrypt yet turns encryption on with the same password. Encrypted backups are marked in the restore list and don't record the note count on Google Drive. If the key goes missing, backups fail instead of uploading unencrypted.
 - **Back up when closing TuxNotes** (Settings → Backup, on by default): when something changed since the last backup, closing hides the window at once and finishes a backup first (up to 90 seconds). Locked notes are locked before that.

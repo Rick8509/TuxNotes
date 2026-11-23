@@ -1,49 +1,109 @@
 name: Release
 
-# Push a tag like v0.1.0 to build Linux packages and attach them to a draft GitHub Release.
+# Step 1 of a release (docs/RELEASING.md): Actions → Release → Run workflow.
+# Raises the version on dev, moves the changelog's Unreleased notes under it and opens
+# the pull request "Release vX.Y.Z" from dev to main. Merging that pull request
+# publishes the release (publish.yml).
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "New version: patch = fixes (0.1.0 → 0.1.1), minor = new features (→ 0.2.0), major = big milestone (→ 1.0.0), keep = the current version (first release, or after closing a release pull request)"
+        type: choice
+        options: [patch, minor, major, keep]
+        default: patch
+      version:
+        description: "Or type an exact version such as 1.0.0 (leave empty to use the choice above)"
+        required: false
+        default: ""
 
 permissions:
-  contents: write
+  contents: write # commit the new version to dev
+  pull-requests: write # open the release pull request
+  actions: write # start the checks on the release commit
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  release:
-    # Build on the oldest supported Ubuntu so the AppImage/deb run on more distros.
-    runs-on: ubuntu-22.04
+  prepare:
+    name: Prepare the release pull request
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install system libraries
+      - name: Only from dev
+        if: github.ref_name != 'dev'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
-            libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev rpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+          echo "::error::Run this workflow from the dev branch (\"Use workflow from: dev\")."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Check the tag matches the app version
+
+      - name: Stop if a release is already waiting
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(node -p "require('./package.json').version")
-          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match the app version $version (package.json)"
+          waiting=$(gh pr list --base main --head dev --state open --json title,url \
+            --jq '.[] | select(.title | startswith("Release v")) | .url')
+          if [ -n "$waiting" ]; then
+            echo "::error::A release is already waiting: $waiting. Merge it, or close it and run this again."
             exit 1
           fi
-          cargo test -p tuxnotes cargo_and_package_json_versions_match
-      - uses: tauri-apps/tauri-action@v0
+
+      - name: Raise the version and move the changelog notes
+        id: version
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Built-in Google OAuth client for Drive backup (see docs/google-setup.md).
-          # Uncomment once the repository secrets exist:
-          # TUXNOTES_GOOGLE_CLIENT_ID: ${{ secrets.TUXNOTES_GOOGLE_CLIENT_ID }}
-          # TUXNOTES_GOOGLE_CLIENT_SECRET: ${{ secrets.TUXNOTES_GOOGLE_CLIENT_SECRET }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "TuxNotes ${{ github.ref_name }}"
-          releaseBody: "See CHANGELOG.md for what's new."
-          releaseDraft: true
-          prerelease: false
+          BUMP: ${{ inputs.bump }}
+          EXACT: ${{ inputs.version }}
+        run: node scripts/release.mjs prepare "${EXACT:-$BUMP}" --notes-out "$RUNNER_TEMP/notes.md"
+
+      - name: Stop if this version was already released
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "::error::v$VERSION was already released. Choose a higher version."
+            exit 1
+          fi
+
+      - name: Commit to dev
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The commit is by the person who started the release.
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com"
+          git commit -am "Release v$VERSION"
+          git push origin HEAD:dev
+
+      - name: Run the checks on the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Pushes made by this workflow don't start other workflows by themselves.
+        run: gh workflow run ci.yml --ref dev
+
+      - name: Open the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "Merging this pull request publishes **TuxNotes $VERSION**."
+            echo
+            echo "1. Wait until the checks below are green (about 10 minutes)."
+            echo "2. Read the notes below. To change them, edit \`CHANGELOG.md\` on \`dev\`."
+            echo "3. Click **Merge pull request** (merge commit). The packages are built and published in about 15 minutes: watch **Actions → Publish**."
+            echo
+            echo "## What's new in $VERSION"
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } > "$RUNNER_TEMP/body.md"
+          url=$(gh pr create --base main --head dev --title "Release v$VERSION" --body-file "$RUNNER_TEMP/body.md")
+          echo "### Release v$VERSION is ready to merge: $url" >> "$GITHUB_STEP_SUMMARY"

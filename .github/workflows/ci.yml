@@ -5,6 +5,8 @@ on:
     # dev is where the work happens; main gets it through pull requests.
     branches: [main, dev]
   pull_request:
+  # The Release workflow starts the checks on its release commit this way.
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}

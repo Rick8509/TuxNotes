@@ -39,7 +39,15 @@ jobs:
           node-version: 22
       - name: Check that every file has the same version and the changelog has its notes
         id: check
-        run: node scripts/release.mjs check "$(node scripts/release.mjs current)"
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            # Test runs happen before a release is prepared: only the versions must agree.
+            node scripts/release.mjs check
+          else
+            node scripts/release.mjs check "$(node scripts/release.mjs current)"
+          fi
       - name: Decide
         id: decide
         env:

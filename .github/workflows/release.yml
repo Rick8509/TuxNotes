@@ -80,8 +80,11 @@ jobs:
           # The commit is by the person who started the release.
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com"
-          git commit -am "Release v$VERSION"
-          git push origin HEAD:dev
+          # Nothing changes when re-opening a release on the same day with no new notes.
+          if ! git diff --quiet; then
+            git commit -am "Release v$VERSION"
+            git push origin HEAD:dev
+          fi
 
       - name: Run the checks on the release commit
         env:

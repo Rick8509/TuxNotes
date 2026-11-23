@@ -54,6 +54,7 @@ Versions are always `X.Y.Z`. Pre-release versions like `1.0.0-beta.1` aren't use
 | Release fails with **"A release is already waiting"** | Merge that pull request, or close it and run Release again. |
 | Release fails with **"was already released"** | That version exists. Choose patch/minor/major, or a higher exact version. |
 | A check fails on the release pull request | Fix it on `dev` and push. The pull request picks up the new commit and the checks run again. Merge when green. |
+| The release pull request waits for checks that never start | **Actions → CI → Run workflow** (from `dev`). The checks run on the release commit and the pull request picks them up. |
 | You want to change the notes before publishing | Edit `CHANGELOG.md` on `dev` (under the version's heading) and push. |
 | You closed a release pull request and want to release later | The version was already raised on `dev`. Next time, run Release with **keep**: it re-uses that version and adds any newer notes to it. |
 | **Publish** failed (red X in Actions) | Nothing was published. Open the run to see which step failed. If GitHub had a hiccup, click **Re-run failed jobs**. If the code needs a fix: fix it on `dev`, then run Release with **patch**. |

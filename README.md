@@ -1,8 +1,34 @@
 # TuxNotes
 
+[![Latest release](https://img.shields.io/github/v/release/Rick8509/TuxNotes?include_prereleases&label=release)](https://github.com/Rick8509/TuxNotes/releases/latest)
+[![CI](https://github.com/Rick8509/TuxNotes/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Rick8509/TuxNotes/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **Open notes for Linux.** A lightweight, local-first notes app with a clean three-pane design inspired by Apple Notes.
 
-> Status: early development (v0.2).
+![TuxNotes with folders, a note list and a note with a table and a checklist](docs/screenshots/notes-light.png)
+
+<p align="center">
+  <img src="docs/screenshots/checklist-dark.png" width="49%" alt="TuxNotes in the dark look, showing a packing checklist">
+  <img src="docs/screenshots/search-light.png" width="49%" alt="Searching all notes for 'lemon', with the matches highlighted in the note">
+</p>
+
+## Install
+
+Download the file for your Linux from the **[latest release](https://github.com/Rick8509/TuxNotes/releases/latest)** (under *Assets*), then install it:
+
+| Your Linux | File | Install with |
+|---|---|---|
+| Ubuntu, Debian, Linux Mint, Pop!_OS, elementary OS, Zorin | `TuxNotes_<version>_amd64.deb` | `sudo apt install ./TuxNotes_*_amd64.deb` |
+| Fedora, openSUSE, RHEL, AlmaLinux, Rocky | `TuxNotes-<version>-1.x86_64.rpm` | `sudo dnf install ./TuxNotes-*.x86_64.rpm` (openSUSE: `sudo zypper install ./TuxNotes-*.x86_64.rpm`) |
+| Any other (Arch, Manjaro, …) | `TuxNotes_<version>_amd64.AppImage` | `chmod +x TuxNotes_*_amd64.AppImage` then run it |
+
+Run the command in the folder you downloaded to (usually `cd ~/Downloads` first). On Ubuntu and Fedora you can also double-click the file to install it with the Software app. TuxNotes then appears in your app menu.
+
+- **Requirements:** a 64-bit PC (x86-64) with a recent distribution: Ubuntu 22.04 or Debian 12 and newer, Fedora 38 and newer.
+- **Updating:** download the new version and install it the same way. Your notes are kept.
+- **Uninstalling:** `sudo apt remove tux-notes` or `sudo dnf remove tux-notes` (AppImage: delete the file). Your notes stay in `~/.local/share/io.github.Rick8509.TuxNotes/` until you delete that folder.
+- **Checking a download** (optional): every release lists SHA-256 checksums in `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt --ignore-missing`), and each file has a signed record that it was built from this repository by GitHub Actions (`gh attestation verify <file> --repo Rick8509/TuxNotes`).
 
 ## Features
 
@@ -154,10 +180,12 @@ Bump the version first in `package.json` and `Cargo.toml` (workspace); `tauri.co
 
 ## Roadmap
 
-- [x] v0.1: folders, notes, rich text, checklists, search, pinning, Recently Deleted
-- [x] v0.2: backup to and restore from Google Drive, with automatic scheduled backups
-- [x] v0.3: tables, images and attachments, Markdown and PDF export, subfolders, locked notes, encrypted backups
-- [ ] Flathub release
+- [x] Folders, notes, rich text, checklists, search, pinning, Recently Deleted
+- [x] Tables, images and attachments, Markdown and PDF export, subfolders, locked notes
+- [x] Backup to and restore from Google Drive, automatic and encrypted (in builds with Google sign-in)
+- [ ] Google sign-in in the official release builds
+- [ ] A notice in the app when a new version is out
+- [ ] Flathub
 
 ## License
 

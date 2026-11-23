@@ -1,9 +1,9 @@
-name: "Release step 1: prepare"
+name: Prepare Release
 
-# Step 1 of a release (docs/RELEASING.md): Actions → "Release step 1: prepare" → Run workflow.
+# Step 1 of a release (docs/RELEASING.md): Actions → "Prepare Release" → Run workflow.
 # Raises the version on dev, moves the changelog's Unreleased notes under it and opens
 # the pull request "Release vX.Y.Z" from dev to main. Merging that pull request
-# publishes the release ("Release step 2: build and publish", release-publish.yml).
+# publishes the release ("Build and Publish", build-publish.yml).
 on:
   workflow_dispatch:
     inputs:
@@ -102,7 +102,7 @@ jobs:
             echo
             echo "1. If GitHub shows **Approve and run workflows** below, click it (GitHub asks this for pull requests opened by a bot). Then wait until the checks are green (about 10 minutes)."
             echo "2. Read the notes below. To change them, edit \`CHANGELOG.md\` on \`dev\`."
-            echo "3. Click **Merge pull request** (merge commit). The packages are built and published in about 15 minutes: watch **Actions → Release step 2: build and publish**."
+            echo "3. Click **Merge pull request** (merge commit). The packages are built and published in about 15 minutes: watch **Actions → Build and Publish**."
             echo
             echo "## What's new in $VERSION"
             echo

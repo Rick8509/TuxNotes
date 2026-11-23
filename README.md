@@ -172,7 +172,7 @@ The browser tests drive the app in Google Chrome or Chromium with the mock backe
 
 ## Releasing
 
-Releases are published from GitHub with one click: **Actions → Release step 1: prepare → Run workflow**, then merge the pull request it opens. The packages are built, signed and published automatically. The full playbook, including test runs and what to do when something fails, is in [docs/RELEASING.md](docs/RELEASING.md).
+Releases are published from GitHub with one click: **Actions → Prepare Release → Run workflow**, then merge the pull request it opens. The packages are built, signed and published automatically. The full playbook, including test runs and what to do when something fails, is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Roadmap
 

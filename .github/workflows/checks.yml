@@ -1,4 +1,4 @@
-name: Checks (tests on every change)
+name: Checks
 
 # Tests every push to dev and main and every pull request. main only accepts a merge
 # when all four jobs pass (see docs/RELEASING.md before renaming a job).
@@ -8,7 +8,7 @@ on:
     # dev is where the work happens; main gets it through pull requests.
     branches: [main, dev]
   pull_request:
-  # "Release step 1" starts the checks on its release commit this way.
+  # "Prepare Release" starts the checks on its release commit this way.
   workflow_dispatch:
 
 concurrency:
@@ -20,7 +20,7 @@ env:
 
 jobs:
   core:
-    name: Engine tests (notes storage, search, Google Drive)
+    name: Core + Drive client (Rust tests, clippy, fmt)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
       - run: cargo test -p tuxnotes-core -p tuxnotes-gdrive
 
   frontend:
-    name: Interface tests (type check, unit tests, build)
+    name: Frontend (typecheck, tests, build)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +52,7 @@ jobs:
           appstreamcli validate --no-net --explain packaging/*.metainfo.xml
 
   e2e:
-    name: Click-through tests (the app in Chrome)
+    name: Browser tests (tests/e2e)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
       - run: npm run test:e2e
 
   app:
-    name: App build
+    name: App (Tauri build check)
     runs-on: ubuntu-22.04
     needs: [core, frontend]
     steps:

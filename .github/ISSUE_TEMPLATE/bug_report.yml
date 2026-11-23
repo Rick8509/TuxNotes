@@ -1,0 +1,71 @@
+name: Bug report
+description: Something in TuxNotes doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please don't include the text of private notes. For **security problems**, don't open an issue: see the [security policy](https://github.com/Rick8509/TuxNotes/security/policy).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead? Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a note with a checklist
+        2. …
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: TuxNotes version
+      description: Settings (Ctrl+,) → About
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - .deb package
+        - .rpm package
+        - AppImage
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Linux distribution and version
+      placeholder: Ubuntu 24.04
+    validations:
+      required: true
+  - type: dropdown
+    id: desktop
+    attributes:
+      label: Desktop
+      options:
+        - GNOME
+        - KDE Plasma
+        - Cinnamon
+        - Xfce
+        - Other
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: Start TuxNotes from a terminal with `tuxnotes`, make the problem happen, and paste what it prints.
+      render: text
+    validations:
+      required: false

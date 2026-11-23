@@ -19,7 +19,7 @@ Everything runs on GitHub: no local build, no tags by hand. A release takes thre
 
 1. **Write the notes.** Every user-visible change should have a line under `## Unreleased` in `CHANGELOG.md` (on `dev`). Those lines become the release notes. The release refuses to start when that section is empty.
 2. **Start it.** On GitHub: **Actions → Release → Run workflow**, choose the kind of version (see below), click **Run workflow**. After a minute there's a pull request **"Release vX.Y.Z"**.
-3. **Publish it.** Open the pull request, wait until the checks are green (about 10 minutes), read the notes, and click **Merge pull request**. Watch **Actions → Publish**: about 15 minutes later the release is on the [Releases page](https://github.com/Rick8509/TuxNotes/releases).
+3. **Publish it.** Open the pull request. If GitHub shows **Approve and run workflows**, click it: GitHub asks this for pull requests opened by a bot, and the checks only start after it. Wait until the checks are green (about 10 minutes), read the notes, and click **Merge pull request**. Watch **Actions → Publish**: about 15 minutes later the release is on the [Releases page](https://github.com/Rick8509/TuxNotes/releases).
 
 That's all. To update your own computer, install the new `.deb` from the release.
 
@@ -54,7 +54,7 @@ Versions are always `X.Y.Z`. Pre-release versions like `1.0.0-beta.1` aren't use
 | Release fails with **"A release is already waiting"** | Merge that pull request, or close it and run Release again. |
 | Release fails with **"was already released"** | That version exists. Choose patch/minor/major, or a higher exact version. |
 | A check fails on the release pull request | Fix it on `dev` and push. The pull request picks up the new commit and the checks run again. Merge when green. |
-| The release pull request waits for checks that never start | **Actions → CI → Run workflow** (from `dev`). The checks run on the release commit and the pull request picks them up. |
+| The release pull request says **Merging is blocked** and no checks run | Look for **Approve and run workflows** on the pull request and click it. If there's no such button: **Actions → CI → Run workflow** (from `dev`). |
 | You want to change the notes before publishing | Edit `CHANGELOG.md` on `dev` (under the version's heading) and push. |
 | You closed a release pull request and want to release later | The version was already raised on `dev`. Next time, run Release with **keep**: it re-uses that version and adds any newer notes to it. |
 | **Publish** failed (red X in Actions) | Nothing was published. Open the run to see which step failed. If GitHub had a hiccup, click **Re-run failed jobs**. If the code needs a fix: fix it on `dev`, then run Release with **patch**. |

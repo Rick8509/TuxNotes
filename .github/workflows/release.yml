@@ -100,7 +100,7 @@ jobs:
           {
             echo "Merging this pull request publishes **TuxNotes $VERSION**."
             echo
-            echo "1. Wait until the checks below are green (about 10 minutes)."
+            echo "1. If GitHub shows **Approve and run workflows** below, click it (GitHub asks this for pull requests opened by a bot). Then wait until the checks are green (about 10 minutes)."
             echo "2. Read the notes below. To change them, edit \`CHANGELOG.md\` on \`dev\`."
             echo "3. Click **Merge pull request** (merge commit). The packages are built and published in about 15 minutes: watch **Actions → Publish**."
             echo

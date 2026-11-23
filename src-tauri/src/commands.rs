@@ -329,4 +329,19 @@ mod tests {
             "bump the version in package.json and Cargo.toml together"
         );
     }
+
+    /// App stores show the newest <release> in the AppStream file as the version.
+    #[test]
+    fn metainfo_lists_the_current_version_first() {
+        let metainfo = include_str!("../../packaging/io.github.Rick8509.TuxNotes.metainfo.xml");
+        let newest = metainfo
+            .split("<release version=\"")
+            .nth(1)
+            .and_then(|rest| rest.split('"').next());
+        assert_eq!(
+            newest,
+            Some(env!("CARGO_PKG_VERSION")),
+            "add a <release> for this version to the metainfo (scripts/release.mjs does it)"
+        );
+    }
 }

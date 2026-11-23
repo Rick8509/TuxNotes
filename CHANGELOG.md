@@ -20,6 +20,7 @@ All notable changes to TuxNotes are listed here.
 - **Google Drive backup and restore**: back up or restore with one click. TuxNotes asks before opening your browser to sign in, then carries on by itself. Automatic daily or weekly backups, and keeps the last N.
 - Rounded window, hideable sidebar, focus mode, resizable panes, Apple-style date sections, drag notes onto folders, and the window remembers its size.
 - Notes, folders, rich text, checklists, pinning, Recently Deleted (30 days) and accent-insensitive search.
+- **App store information.** The packages include an AppStream description with screenshots, so Software centres (GNOME Software, KDE Discover) show TuxNotes properly.
 
 ### Security
 - **Restoring a backup** now first checks that it's a believable size, lists no file twice, and fits on the disk with room to spare, so a broken or hostile backup can't fill the disk. The password check accepts at most 256 MB of memory settings (TuxNotes uses 64 MB).

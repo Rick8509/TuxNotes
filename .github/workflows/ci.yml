@@ -40,6 +40,11 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+      - name: Check the app store information (AppStream)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends appstream
+          appstreamcli validate --no-net --explain packaging/*.metainfo.xml
 
   e2e:
     name: Browser tests (tests/e2e)

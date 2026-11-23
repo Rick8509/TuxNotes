@@ -18,14 +18,9 @@ describe("nextVersion", () => {
     ["0.1.0", "patch", "0.1.1"],
     ["0.1.3", "minor", "0.2.0"],
     ["0.9.3", "major", "1.0.0"],
-    ["0.1.0", "beta", "0.2.0-beta.1"],
-    ["0.2.0-beta.1", "beta", "0.2.0-beta.2"],
-    ["0.2.0-beta.2", "minor", "0.2.0"],
-    ["0.2.0-beta.2", "patch", "0.2.0"],
-    ["1.0.0-beta.3", "major", "1.0.0"],
-    ["0.2.0-beta.2", "major", "1.0.0"],
-    ["0.1.0", "1.0.0-beta.1", "1.0.0-beta.1"],
+    ["0.1.0", "1.0.0", "1.0.0"],
     ["0.1.0", "0.1.0", "0.1.0"],
+    ["0.9.0", "0.10.0", "0.10.0"],
   ])("%s + %s → %s", (current, bump, expected) => {
     expect(nextVersion(current, bump)).toBe(expected);
   });
@@ -37,10 +32,14 @@ describe("nextVersion", () => {
     expect(() => nextVersion("0.2", "patch")).toThrow();
   });
 
-  it("orders a beta before its release", () => {
-    expect(compareVersions("1.0.0-beta.9", "1.0.0")).toBeLessThan(0);
-    expect(compareVersions("1.0.0-beta.10", "1.0.0-beta.9")).toBeGreaterThan(0);
+  it("explains why pre-release versions aren't used", () => {
+    expect(() => nextVersion("0.2.0", "0.3.0-beta.1")).toThrow(/newer than 1.0.0.*test run/);
+    expect(() => nextVersion("0.2.0", "beta")).toThrow();
+  });
+
+  it("compares numerically", () => {
     expect(compareVersions("0.10.0", "0.9.0")).toBeGreaterThan(0);
+    expect(compareVersions("1.0.0", "1.0.0")).toBe(0);
   });
 });
 
@@ -137,11 +136,6 @@ describe("metainfo", () => {
     expect(metainfoVersion(out)).toBe("0.2.0");
     expect(out).toContain('<release version="0.2.0" date="2026-12-01">\n      <url type="details">https://example.com/releases/tag/v0.2.0</url>');
     expect(out).toContain('<release version="0.1.0" date="2026-11-23">');
-  });
-
-  it("marks betas as development releases", () => {
-    const out = addMetainfoRelease(METAINFO, "0.2.0-beta.1", "2026-12-01", "https://example.com");
-    expect(out).toContain('<release version="0.2.0-beta.1" date="2026-12-01" type="development">');
   });
 
   it("updates the date when the version is already listed", () => {

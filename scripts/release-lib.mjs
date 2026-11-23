@@ -2,66 +2,58 @@
 // AppStream file. No file access here, so everything is easy to test
 // (scripts/release-lib.test.mjs).
 
-const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-(beta)\.(\d+))?$/;
+const VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
 
-/** "1.2.3" or "1.2.3-beta.4" → parts; anything else throws. */
+/** "1.2.3" → parts; anything else throws. */
 export function parseVersion(v) {
   const m = VERSION.exec(v);
-  if (!m) throw new Error(`"${v}" isn't a version like 1.2.3 or 1.2.3-beta.1`);
-  return { major: +m[1], minor: +m[2], patch: +m[3], beta: m[4] ? +m[5] : null };
+  if (!m) {
+    const hint = /^\d+\.\d+\.\d+-/.test(v)
+      ? " Pre-release versions such as 1.0.0-beta.1 aren't used: Linux packages would treat them as newer than 1.0.0. For a test version, use a test run of the Publish workflow (docs/RELEASING.md)."
+      : "";
+    throw new Error(`"${v}" isn't a version like 1.2.3.${hint}`);
+  }
+  return { major: +m[1], minor: +m[2], patch: +m[3] };
 }
 
-const format = ({ major, minor, patch, beta }) => `${major}.${minor}.${patch}${beta === null ? "" : `-beta.${beta}`}`;
+const format = ({ major, minor, patch }) => `${major}.${minor}.${patch}`;
 
-export const BUMPS = ["patch", "minor", "major", "beta", "keep"];
+export const BUMPS = ["patch", "minor", "major", "keep"];
 
 /**
  * The next version after `current`:
- * - patch: 1.2.3 → 1.2.4 (a beta 1.3.0-beta.2 → 1.3.0, its final release)
- * - minor: 1.2.3 → 1.3.0 (1.3.0-beta.2 → 1.3.0)
- * - major: 1.2.3 → 2.0.0 (2.0.0-beta.2 → 2.0.0)
- * - beta:  1.2.3 → 1.3.0-beta.1, then 1.3.0-beta.2, …
- * - keep:  the current version (for the very first release)
- * - or an exact version such as "2.0.0" or "2.0.0-beta.1"
+ * - patch: 1.2.3 → 1.2.4 (fixes only)
+ * - minor: 1.2.3 → 1.3.0 (new features)
+ * - major: 1.2.3 → 2.0.0 (a big milestone)
+ * - keep:  the current version (the very first release, or one prepared but not published)
+ * - or an exact, higher version such as "2.0.0"
  */
 export function nextVersion(current, bump) {
   const v = parseVersion(current);
-  const isBeta = v.beta !== null;
   switch (bump) {
     case "keep":
       return current;
     case "patch":
-      return isBeta ? format({ ...v, beta: null }) : format({ ...v, patch: v.patch + 1, beta: null });
+      return format({ ...v, patch: v.patch + 1 });
     case "minor":
-      return isBeta && v.patch === 0 ? format({ ...v, beta: null }) : format({ ...v, minor: v.minor + 1, patch: 0, beta: null });
+      return format({ ...v, minor: v.minor + 1, patch: 0 });
     case "major":
-      return isBeta && v.minor === 0 && v.patch === 0
-        ? format({ ...v, beta: null })
-        : format({ major: v.major + 1, minor: 0, patch: 0, beta: null });
-    case "beta":
-      return isBeta ? format({ ...v, beta: v.beta + 1 }) : format({ ...v, minor: v.minor + 1, patch: 0, beta: 1 });
+      return format({ major: v.major + 1, minor: 0, patch: 0 });
     default: {
       parseVersion(bump); // throws for anything that isn't a version
-      if (compareVersions(bump, current) <= 0 && bump !== current) {
-        throw new Error(`${bump} is older than the current version ${current}`);
-      }
+      if (compareVersions(bump, current) < 0) throw new Error(`${bump} is older than the current version ${current}`);
       return bump;
     }
   }
 }
 
-/** Negative if a < b, 0 if equal, positive if a > b (a beta comes before its release). */
+/** Negative if a < b, 0 if equal, positive if a > b. */
 export function compareVersions(a, b) {
   const x = parseVersion(a);
   const y = parseVersion(b);
   for (const k of ["major", "minor", "patch"]) if (x[k] !== y[k]) return x[k] - y[k];
-  if (x.beta === y.beta) return 0;
-  if (x.beta === null) return 1;
-  if (y.beta === null) return -1;
-  return x.beta - y.beta;
+  return 0;
 }
-
-export const isPrerelease = (v) => parseVersion(v).beta !== null;
 
 // ---------------------------------------------------------------- changelog
 
@@ -126,9 +118,8 @@ function reopenSection(changelog, version, date, newNotes) {
 
 /** Add (or update) the <release> entry for a version at the top of <releases>. */
 export function addMetainfoRelease(xml, version, date, repoUrl) {
-  const type = isPrerelease(version) ? ' type="development"' : "";
   const entry =
-    `    <release version="${version}" date="${date}"${type}>\n` +
+    `    <release version="${version}" date="${date}">\n` +
     `      <url type="details">${repoUrl}/releases/tag/v${version}</url>\n` +
     `    </release>\n`;
   const existing = new RegExp(`[ \\t]*<release version="${version.replace(/\./g, "\\.")}"[\\s\\S]*?</release>\\n`);

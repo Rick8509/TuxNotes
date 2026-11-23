@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Release helper, used by the Release and Publish workflows (see docs/RELEASING.md).
 //
-//   node scripts/release.mjs prepare <patch|minor|major|beta|keep|X.Y.Z> [--date YYYY-MM-DD] [--notes-out FILE] [--dry-run]
+//   node scripts/release.mjs prepare <patch|minor|major|keep|X.Y.Z> [--date YYYY-MM-DD] [--notes-out FILE] [--dry-run]
 //       Raise the version everywhere (package.json, package-lock.json, Cargo.toml,
 //       Cargo.lock), move the changelog's Unreleased notes under the new version and
 //       add it to the AppStream file. Prints the new version.
@@ -13,7 +13,7 @@
 //   node scripts/release.mjs current
 //       Print the current version.
 //
-// In GitHub Actions, prepare and check also write version= and prerelease= to $GITHUB_OUTPUT.
+// In GitHub Actions, prepare and check also write version= to $GITHUB_OUTPUT.
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,7 +21,6 @@ import {
   addMetainfoRelease,
   BUMPS,
   cargoTomlVersion,
-  isPrerelease,
   metainfoVersion,
   nextVersion,
   parseVersion,
@@ -54,7 +53,7 @@ function fail(message) {
 
 function output(version) {
   if (!process.env.GITHUB_OUTPUT) return;
-  appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nprerelease=${isPrerelease(version)}\n`);
+  appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\n`);
 }
 
 function option(args, name) {

@@ -4,13 +4,31 @@
 // an in-memory mock so the interface can be developed without building Rust.
 
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
-import type { DocJSON, Folder, Note, NoteFilter, NoteSummary } from "./types";
+import type {
+  AppInfo,
+  AttachResult,
+  Attachment,
+  AutoBackup,
+  BackupInfo,
+  BackupStatus,
+  DocJSON,
+  Folder,
+  LockStatus,
+  MarkdownFile,
+  Note,
+  NoteFilter,
+  NoteSummary,
+  RestoreResult,
+} from "./types";
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 type Invoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
 
 let invokeImpl: Invoke | null = isTauri ? tauriInvoke : null;
+
+/** The message of an error from the backend (or anything else thrown), for showing to the user. */
+export const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (!invokeImpl) {
@@ -27,7 +45,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 
 export const api = {
   listFolders: () => call<Folder[]>("list_folders"),
-  createFolder: (name: string) => call<Folder>("create_folder", { name }),
+  createFolder: (name: string, parentId: string | null = null) => call<Folder>("create_folder", { name, parentId }),
+  moveFolder: (id: string, parentId: string | null, index: number) => call<Folder>("move_folder", { id, parentId, index }),
   renameFolder: (id: string, name: string) => call<Folder>("rename_folder", { id, name }),
   deleteFolder: (id: string) => call<number>("delete_folder", { id }),
 
@@ -38,11 +57,82 @@ export const api = {
     call<NoteSummary>("update_note_content", { id, content }),
   setNotePinned: (id: string, pinned: boolean) =>
     call<NoteSummary>("set_note_pinned", { id, pinned }),
+  duplicateNote: (id: string) => call<Note>("duplicate_note", { id }),
+
+  // Locked notes
+  lockStatus: () => call<LockStatus>("lock_status"),
+  setLockPassword: (password: string, hint: string) => call<LockStatus>("set_lock_password", { password, hint }),
+  changeLockPassword: (oldPassword: string, newPassword: string, hint: string) =>
+    call<LockStatus>("change_lock_password", { oldPassword, newPassword, hint }),
+  unlockNotes: (password: string) => call<LockStatus>("unlock_notes", { password }),
+  lockNotes: () => call<LockStatus>("lock_notes"),
+  lockNote: (id: string) => call<NoteSummary>("lock_note", { id }),
+  removeNoteLock: (id: string) => call<NoteSummary>("remove_note_lock", { id }),
   moveNote: (id: string, folderId: string) => call<NoteSummary>("move_note", { id, folderId }),
   trashNote: (id: string) => call<NoteSummary>("trash_note", { id }),
   restoreNote: (id: string) => call<NoteSummary>("restore_note", { id }),
   deleteNotePermanently: (id: string) => call<void>("delete_note_permanently", { id }),
   emptyTrash: () => call<number>("empty_trash"),
   trashCount: () => call<number>("trash_count"),
+  /** Changes when another program wrote to the notes database. */
+  dataVersion: () => call<number>("data_version"),
   searchNotes: (query: string) => call<NoteSummary[]>("search_notes", { query }),
+  discardNoteIfBlank: (id: string) => call<boolean>("discard_note_if_blank", { id }),
+
+  backupStatus: () => call<BackupStatus>("backup_status"),
+  setBackupPreferences: (autoBackup: AutoBackup, keepBackups: number, backupOnClose: boolean) =>
+    call<BackupStatus>("set_backup_preferences", { autoBackup, keepBackups, backupOnClose }),
+  /** Encrypt backups with `password` (or change it); null turns encryption off. */
+  setBackupPassword: (password: string | null) => call<BackupStatus>("set_backup_password", { password }),
+  backupOnCloseNeeded: () => call<boolean>("backup_on_close_needed"),
+  backupBeforeExit: () => call<boolean>("backup_before_exit"),
+  googleSignIn: () => call<BackupStatus>("google_sign_in"),
+  googleCancelSignIn: () => call<void>("google_cancel_sign_in"),
+  googleSignOut: () => call<BackupStatus>("google_sign_out"),
+  backupNow: () => call<BackupInfo>("backup_now"),
+  listBackups: () => call<BackupInfo[]>("list_backups"),
+  restoreBackup: (id: string, password?: string) => call<RestoreResult>("restore_backup", { id, password: password ?? null }),
+
+  appInfo: () => call<AppInfo>("app_info"),
+
+  /** Add a pasted or dropped file to a note. The bytes go over IPC as raw binary. */
+  async addAttachment(noteId: string, file: File): Promise<Attachment> {
+    if (!isTauri) return (await import("./mock")).mockAddAttachment(noteId, file);
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    try {
+      return await tauriInvoke<Attachment>("add_attachment", bytes, {
+        headers: {
+          "x-note-id": encodeURIComponent(noteId),
+          "x-filename": encodeURIComponent(file.name || "pasted-image.png"),
+          "x-mime": encodeURIComponent(file.type || ""),
+        },
+      });
+    } catch (err) {
+      throw new Error(typeof err === "string" ? err : String((err as Error)?.message ?? err));
+    }
+  },
+  /** Attach the image on the system clipboard (null if there isn't one). */
+  /** Attach what the system clipboard holds: copied files, or else an image. */
+  pasteFromClipboard: (noteId: string): Promise<AttachResult> =>
+    isTauri ? call<AttachResult>("paste_from_clipboard", { noteId }) : Promise.resolve({ attachments: [], errors: [] }),
+  /** Show the file picker and attach the chosen files. */
+  attachFiles: (noteId: string) =>
+    isTauri ? call<AttachResult>("attach_files", { noteId }) : import("./mock").then((m) => m.mockAttachFiles(noteId)),
+  openAttachment: (id: string) =>
+    isTauri ? call<void>("open_attachment", { id }) : import("./mock").then((m) => m.mockOpenAttachment(id)),
+  /** Save Markdown (attachments are copied next to it). Returns the path, or null if cancelled. */
+  exportMarkdown: (title: string, markdown: string) =>
+    isTauri
+      ? call<string | null>("export_markdown", { title, markdown })
+      : import("./mock").then((m) => m.mockExportMarkdown(title, markdown)),
+  exportPdf: (title: string) => (isTauri ? call<string | null>("export_pdf", { title }) : import("./mock").then((m) => m.mockPrint())),
+  printNote: () => (isTauri ? call<void>("print_note") : import("./mock").then((m) => m.mockPrint())),
+  pickMarkdownFiles: () =>
+    isTauri ? call<MarkdownFile[]>("pick_markdown_files") : import("./mock").then((m) => m.mockPickMarkdownFiles()),
+  importImage: (noteId: string, markdownPath: string, src: string) =>
+    isTauri
+      ? call<Attachment>("import_image", { noteId, markdownPath, src })
+      : Promise.reject(new Error("Images can't be imported in the browser preview.")),
+  saveAttachmentAs: (id: string) =>
+    isTauri ? call<boolean>("save_attachment_as", { id }) : import("./mock").then((m) => m.mockSaveAttachment(id)),
 };

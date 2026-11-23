@@ -11,15 +11,20 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:e2e": "vite build && node tests/e2e/run.mjs",
+    "screenshots": "vite build && node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
     "@lucide/svelte": "^1.75.0",
     "@tauri-apps/api": "^2.12.5",
+    "@tauri-apps/plugin-opener": "^2.7.3",
     "@tiptap/core": "^3.34.0",
     "@tiptap/extension-list": "^3.34.0",
+    "@tiptap/extension-table": "^3.34.0",
     "@tiptap/extensions": "^3.34.0",
+    "@tiptap/markdown": "^3.34.0",
     "@tiptap/pm": "^3.34.0",
     "@tiptap/starter-kit": "^3.34.0"
   },
@@ -28,10 +33,16 @@
     "@tauri-apps/cli": "^2.12.5",
     "@tsconfig/svelte": "^5.0.9",
     "@types/node": "^26.6.6",
+    "puppeteer-core": "^25.18.1",
     "svelte": "^5.58.0",
     "svelte-check": "^4.7.8",
     "typescript": "~6.0.3",
     "vite": "^8.3.8",
     "vitest": "^5.1.1"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Rick8509/TuxNotes.git"
+  },
+  "homepage": "https://github.com/Rick8509/TuxNotes"
 }

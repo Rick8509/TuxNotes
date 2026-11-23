@@ -1,12 +1,18 @@
-name: CI
+name: Checks
+
+# Tests every push to dev and main and every pull request. main only accepts a merge
+# when all four jobs pass (see docs/RELEASING.md before renaming a job).
 
 on:
   push:
-    branches: [main]
+    # dev is where the work happens; main gets it through pull requests.
+    branches: [main, dev]
   pull_request:
+  # "Prepare Release" starts the checks on its release commit this way.
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: checks-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -14,7 +20,7 @@ env:
 
 jobs:
   core:
-    name: Core (Rust tests, clippy, fmt)
+    name: Core + Drive client (Rust tests, clippy, fmt)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,8 +29,8 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy -p tuxnotes-core --all-targets -- -D warnings
-      - run: cargo test -p tuxnotes-core
+      - run: cargo clippy -p tuxnotes-core -p tuxnotes-gdrive --all-targets -- -D warnings
+      - run: cargo test -p tuxnotes-core -p tuxnotes-gdrive
 
   frontend:
     name: Frontend (typecheck, tests, build)
@@ -39,6 +45,24 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+      - name: Check the app store information (AppStream)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends appstream
+          appstreamcli validate --no-net --explain packaging/*.metainfo.xml
+
+  e2e:
+    name: Browser tests (tests/e2e)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # GitHub's Ubuntu runners come with Google Chrome.
+      - run: npm run test:e2e
 
   app:
     name: App (Tauri build check)
@@ -62,3 +86,4 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test -p tuxnotes

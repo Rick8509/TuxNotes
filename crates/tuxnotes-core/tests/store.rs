@@ -467,3 +467,355 @@ fn note_filter_json_shape() {
     let f: NoteFilter = serde_json::from_str(r#"{"kind":"trash"}"#).unwrap();
     assert_eq!(f, NoteFilter::Trash);
 }
+
+// --------------------------------------------------------- blank-note cleanup
+
+#[test]
+fn blank_notes_are_discarded_but_notes_with_content_are_kept() {
+    let s = store();
+    let blank = s.create_note(None).unwrap();
+    let typed = s.create_note(None).unwrap();
+    s.update_note_content(&typed.id, &doc(&["keep me"]))
+        .unwrap();
+    let checklist = s.create_note(None).unwrap();
+    s.update_note_content(
+        &checklist.id,
+        &json!({ "type": "doc", "content": [{ "type": "taskList", "content": [
+            { "type": "taskItem", "attrs": { "checked": false }, "content": [{ "type": "paragraph" }] }
+        ]}]}),
+    )
+    .unwrap();
+
+    assert!(s.discard_note_if_blank(&blank.id).unwrap());
+    assert!(matches!(s.get_note(&blank.id), Err(Error::NotFound { .. })));
+    assert!(!s.discard_note_if_blank(&typed.id).unwrap());
+    assert!(!s.discard_note_if_blank(&checklist.id).unwrap());
+    assert!(!s.discard_note_if_blank("missing").unwrap());
+
+    // Blank notes in the trash are left alone (they're already on their way out).
+    let trashed = s.create_note(None).unwrap();
+    s.trash_note(&trashed.id).unwrap();
+    assert!(!s.discard_note_if_blank(&trashed.id).unwrap());
+
+    // Startup cleanup.
+    s.create_note(None).unwrap();
+    s.create_note(None).unwrap();
+    assert_eq!(s.discard_blank_notes().unwrap(), 2);
+    assert_eq!(s.list_notes(&NoteFilter::All).unwrap().len(), 2);
+}
+
+// ---------------------------------------------------------------- subfolders
+
+fn names_in(s: &Store, parent: Option<&str>) -> Vec<String> {
+    s.list_folders()
+        .unwrap()
+        .into_iter()
+        .filter(|f| f.parent_id.as_deref() == parent)
+        .map(|f| f.name)
+        .collect()
+}
+
+#[test]
+fn subfolders_live_inside_their_parent() {
+    let s = store();
+    let work = s.create_folder("Work").unwrap();
+    let projects = s.create_subfolder("Projects", Some(&work.id)).unwrap();
+    assert_eq!(projects.parent_id.as_deref(), Some(work.id.as_str()));
+    assert_eq!(names_in(&s, Some(&work.id)), ["Projects"]);
+    assert_eq!(names_in(&s, None), [DEFAULT_FOLDER_NAME, "Work"]);
+    assert!(matches!(
+        s.create_subfolder("X", Some("nope")),
+        Err(Error::NotFound { .. })
+    ));
+    // Notes can live in subfolders.
+    let n = s.create_note(Some(&projects.id)).unwrap();
+    assert_eq!(n.folder_id, projects.id);
+}
+
+#[test]
+fn folder_names_only_need_to_be_unique_among_siblings() {
+    let s = store();
+    let work = s.create_folder("Work").unwrap();
+    let home = s.create_folder("Home").unwrap();
+    s.create_subfolder("Ideas", Some(&work.id)).unwrap();
+    s.create_subfolder("Ideas", Some(&home.id)).unwrap();
+    s.create_folder("Ideas").unwrap();
+    assert!(matches!(
+        s.create_subfolder("ideas", Some(&work.id)),
+        Err(Error::InvalidInput(_))
+    ));
+}
+
+#[test]
+fn folders_can_be_reordered_and_nested_by_moving() {
+    let mut s = store();
+    let a = s.create_folder("A").unwrap();
+    let b = s.create_folder("B").unwrap();
+    let c = s.create_folder("C").unwrap();
+    s.move_folder(&c.id, None, 0).unwrap();
+    assert_eq!(
+        names_in(&s, None),
+        [DEFAULT_FOLDER_NAME, "C", "A", "B"],
+        "default folder stays first"
+    );
+    s.move_folder(&c.id, None, 99).unwrap();
+    assert_eq!(names_in(&s, None), [DEFAULT_FOLDER_NAME, "A", "B", "C"]);
+
+    // Nest B inside A, then C inside A before B.
+    s.move_folder(&b.id, Some(&a.id), 0).unwrap();
+    s.move_folder(&c.id, Some(&a.id), 0).unwrap();
+    assert_eq!(names_in(&s, Some(&a.id)), ["C", "B"]);
+    assert_eq!(names_in(&s, None), [DEFAULT_FOLDER_NAME, "A"]);
+    // And back out to the top level (positions count the movable folders only).
+    s.move_folder(&b.id, None, 1).unwrap();
+    assert_eq!(names_in(&s, None), [DEFAULT_FOLDER_NAME, "A", "B"]);
+    s.move_folder(&b.id, None, 0).unwrap();
+    assert_eq!(names_in(&s, None), [DEFAULT_FOLDER_NAME, "B", "A"]);
+}
+
+#[test]
+fn folders_cant_move_into_themselves_and_the_default_stays_put() {
+    let mut s = store();
+    let a = s.create_folder("A").unwrap();
+    let b = s.create_subfolder("B", Some(&a.id)).unwrap();
+    let c = s.create_subfolder("C", Some(&b.id)).unwrap();
+    assert!(matches!(
+        s.move_folder(&a.id, Some(&a.id), 0),
+        Err(Error::InvalidInput(_))
+    ));
+    assert!(matches!(
+        s.move_folder(&a.id, Some(&c.id), 0),
+        Err(Error::InvalidInput(_))
+    ));
+    let default_id = s.default_folder_id().unwrap();
+    assert!(matches!(
+        s.move_folder(&default_id, Some(&a.id), 0),
+        Err(Error::InvalidInput(_))
+    ));
+    // Moving next to a same-named sibling is refused.
+    let other = s.create_folder("C").unwrap();
+    assert!(matches!(
+        s.move_folder(&other.id, Some(&b.id), 0),
+        Err(Error::InvalidInput(_))
+    ));
+    assert_eq!(
+        s.descendant_ids(&a.id).unwrap(),
+        [b.id.clone(), c.id.clone()]
+    );
+}
+
+#[test]
+fn nesting_is_limited_to_five_levels() {
+    let mut s = store();
+    let mut parent = s.create_folder("L1").unwrap();
+    for level in 2..=5 {
+        parent = s
+            .create_subfolder(&format!("L{level}"), Some(&parent.id))
+            .unwrap();
+    }
+    assert!(matches!(
+        s.create_subfolder("L6", Some(&parent.id)),
+        Err(Error::InvalidInput(_))
+    ));
+    // A two-level subtree can't be moved under level 4 either (4 + 2 > 5).
+    let top = s.create_folder("Top").unwrap();
+    s.create_subfolder("Child", Some(&top.id)).unwrap();
+    let l4 = s.get_folder(&parent.parent_id.clone().unwrap()).unwrap();
+    assert!(matches!(
+        s.move_folder(&top.id, Some(&l4.id), 0),
+        Err(Error::InvalidInput(_))
+    ));
+}
+
+#[test]
+fn deleting_a_folder_deletes_its_subfolders_and_keeps_their_notes_in_trash() {
+    let mut s = store();
+    let work = s.create_folder("Work").unwrap();
+    let projects = s.create_subfolder("Projects", Some(&work.id)).unwrap();
+    let old = s.create_subfolder("Old", Some(&projects.id)).unwrap();
+    for f in [&work, &projects, &old] {
+        let n = s.create_note(Some(&f.id)).unwrap();
+        s.update_note_content(&n.id, &doc(&[&format!("note in {}", f.name)]))
+            .unwrap();
+    }
+    assert_eq!(s.delete_folder(&work.id).unwrap(), 3);
+    assert_eq!(
+        s.list_folders().unwrap().len(),
+        1,
+        "only the default folder is left"
+    );
+    assert_eq!(s.trash_count().unwrap(), 3);
+    for n in s.list_notes(&NoteFilter::Trash).unwrap() {
+        assert_eq!(
+            n.folder_id,
+            s.default_folder_id().unwrap(),
+            "restorable into the default folder"
+        );
+    }
+}
+
+// ---------------------------------------------------------------- duplicating
+
+#[test]
+fn duplicating_copies_content_into_the_same_folder() {
+    let s = store();
+    let work = s.create_folder("Work").unwrap();
+    let n = s.create_note(Some(&work.id)).unwrap();
+    s.update_note_content(&n.id, &doc(&["Plan", "details"]))
+        .unwrap();
+    s.set_note_pinned(&n.id, true).unwrap();
+    let copy = s.duplicate_note(&n.id).unwrap();
+    assert_ne!(copy.id, n.id);
+    assert_eq!(copy.folder_id, work.id);
+    assert_eq!(copy.content, s.get_note(&n.id).unwrap().content);
+    assert_eq!(copy.title, "Plan");
+    assert!(!copy.is_pinned, "the copy isn't pinned");
+    assert_eq!(
+        s.search("details", 10).unwrap().len(),
+        2,
+        "both are searchable"
+    );
+    s.trash_note(&n.id).unwrap();
+    assert!(
+        matches!(s.duplicate_note(&n.id), Err(Error::InvalidInput(_))),
+        "notes in the trash can't be duplicated"
+    );
+}
+
+// ---------------------------------------------------------------- timestamps
+
+#[test]
+fn edits_stay_newest_after_the_clock_went_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("notes.db");
+    let (old, edited) = {
+        let s = Store::open(&path).unwrap();
+        let a = s.create_note(None).unwrap();
+        s.update_note_content(&a.id, &doc(&["Older note"])).unwrap();
+        let b = s.create_note(None).unwrap();
+        s.update_note_content(&b.id, &doc(&["Edited later"]))
+            .unwrap();
+        // Pretend the first note was saved an hour "in the future" (the clock was ahead
+        // then, or it came from a computer whose clock was ahead).
+        let ahead = s.get_note_summary(&a.id).unwrap().updated_at + 3_600_000;
+        s.conn_for_tests()
+            .execute(
+                "UPDATE notes SET updated_at = ?2 WHERE id = ?1",
+                rusqlite::params![a.id, ahead],
+            )
+            .unwrap();
+        (a.id, b.id)
+    };
+    let s = Store::open(&path).unwrap();
+    s.update_note_content(&edited, &doc(&["Edited later", "again"]))
+        .unwrap();
+    let list = s.list_notes(&NoteFilter::All).unwrap();
+    assert_eq!(list[0].id, edited, "the note just edited is on top");
+    assert_ne!(list[0].id, old);
+}
+
+#[test]
+fn a_badly_wrong_clock_doesnt_push_all_dates_into_the_future() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("notes.db");
+    {
+        let s = Store::open(&path).unwrap();
+        let a = s.create_note(None).unwrap();
+        s.update_note_content(&a.id, &doc(&["From the year 2100"]))
+            .unwrap();
+        s.conn_for_tests()
+            .execute(
+                "UPDATE notes SET updated_at = 4102444800000 WHERE id = ?1",
+                [&a.id],
+            )
+            .unwrap();
+    }
+    let s = Store::open(&path).unwrap();
+    let b = s.create_note(None).unwrap();
+    assert!(
+        b.created_at < 4_000_000_000_000,
+        "new notes get today's date, not 2100"
+    );
+}
+
+#[test]
+fn changes_from_another_program_are_noticed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("notes.db");
+    let app = Store::open(&path).unwrap();
+    let before = app.data_version().unwrap();
+    let n = app.create_note(None).unwrap();
+    app.update_note_content(&n.id, &doc(&["Own edit"])).unwrap();
+    assert_eq!(
+        app.data_version().unwrap(),
+        before,
+        "own changes don't count"
+    );
+
+    let other = Store::open(&path).unwrap(); // e.g. a tool writing to the same file
+    other
+        .update_note_content(&n.id, &doc(&["Changed outside"]))
+        .unwrap();
+    assert_ne!(app.data_version().unwrap(), before, "outside changes do");
+    assert_eq!(app.get_note(&n.id).unwrap().title, "Changed outside");
+}
+
+#[test]
+fn search_finds_words_inside_chinese_japanese_and_thai_sentences() {
+    let mut s = store();
+    let add = |s: &Store, lines: &[&str]| {
+        let n = s.create_note(None).unwrap();
+        s.update_note_content(&n.id, &doc(lines)).unwrap();
+        n.id
+    };
+    let ja = add(&s, &["買い物", "今日は牛乳を買う"]);
+    let zh = add(&s, &["笔记", "我们明天去北京开会"]);
+    let th = add(&s, &["รายการ", "ฉันชอบกินข้าวผัด"]);
+    let mixed = add(&s, &["Groceries 買い物", "milk and 牛乳"]);
+    fn found(s: &Store, q: &str) -> Vec<String> {
+        s.search(q, 50).unwrap().into_iter().map(|n| n.id).collect()
+    }
+
+    assert_eq!(
+        found(&s, "牛乳").len(),
+        2,
+        "found in the middle of a Japanese sentence"
+    );
+    assert!(found(&s, "牛乳").contains(&ja) && found(&s, "牛乳").contains(&mixed));
+    assert_eq!(found(&s, "北京"), vec![zh.clone()]);
+    assert_eq!(found(&s, "กิน"), vec![th.clone()]);
+    assert_eq!(
+        found(&s, "milk 牛乳"),
+        vec![mixed.clone()],
+        "Latin and CJK words together"
+    );
+    assert!(found(&s, "牛乳 cheese").is_empty(), "every word must match");
+    assert_eq!(
+        found(&s, "買い物"),
+        {
+            let mut v = vec![mixed.clone(), ja.clone()];
+            v.sort_by_key(|id| std::cmp::Reverse(s.get_note_summary(id).unwrap().updated_at));
+            v
+        },
+        "titles too, newest first"
+    );
+    assert!(
+        found(&s, "%").is_empty() && found(&s, "_").is_empty(),
+        "no wildcard surprises"
+    );
+
+    // A locked note's body isn't searchable, whatever the script.
+    s.set_lock_password_with(
+        "hunter22",
+        "",
+        tuxnotes_core::crypto::KdfParams {
+            m_kib: 8 * 1024,
+            t: 1,
+            p: 1,
+        },
+    )
+    .unwrap();
+    s.lock_note(&zh).unwrap();
+    assert!(found(&s, "北京").is_empty());
+    assert_eq!(found(&s, "笔记"), [zh], "the title still is");
+}

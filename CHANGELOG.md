@@ -1,0 +1,74 @@
+# Changelog
+
+All notable changes to TuxNotes are listed here.
+
+## Unreleased
+
+## 0.1.0 - 2026-11-23
+
+### Added
+- **Encrypted backups.** Settings → Backup → **Encrypt backups**: backups are encrypted on this computer before upload (XChaCha20-Poly1305 in authenticated 1 MiB chunks, so tampering or a cut-off file is detected; key from the password via Argon2id, salt and settings stored in the file). The derived key is kept in the system keyring so automatic backups keep working; the password isn't stored. Restoring asks for the password when this computer doesn't have the key, and restoring an encrypted backup on a computer that doesn't encrypt yet turns encryption on with the same password. Encrypted backups are marked in the restore list and don't record the note count on Google Drive. If the key goes missing, backups fail instead of uploading unencrypted.
+- **Back up when closing TuxNotes** (Settings → Backup, on by default): when something changed since the last backup, closing hides the window at once and finishes a backup first (up to 90 seconds). Locked notes are locked before that.
+- **Password-locked notes.** ⋯ → **Lock Note…** (or right-click a note). One password for all locked notes, chosen the first time, with an optional hint. A locked note's body is encrypted (XChaCha20-Poly1305, with the key protected by the password through Argon2id); the list shows a padlock and "Locked", and only the title stays searchable. Locked notes stay open until **Lock Now** (the open padlock in the toolbar), after 5/10/30/60 idle minutes (**Settings → General**, default 10), or when TuxNotes closes. Change the password in **Settings → General**. Images and files in a locked note aren't encrypted, and forgotten passwords can't be recovered.
+- **Undo delete, duplicate and note info.** Deleting a note shows a message with **Undo** (or press Ctrl+Z in the note list) that brings it straight back. **Duplicate** (note context menu or ⋯ menu) copies a note into the same folder. **⋯ → Note Info…** shows word and character counts, checklist progress, attachments, the folder path, and created/modified dates.
+- **Subfolders.** Right-click a folder → **New Subfolder…** (up to 5 levels). Drag a folder onto the middle of another to nest it, onto its top or bottom edge to reorder, or onto the "Folders" label to move it back to the top level. Expand and collapse branches with the arrow (remembered). Folder names only need to be unique within the same parent. Deleting a folder deletes its subfolders too; all their notes go to Recently Deleted. The **Move to** menu shows the folder tree.
+- **Export and import** (the **⋯** button in the editor): **Export as Markdown…** saves the note as a `.md` file, copying its images and files into a "‹name› files" folder next to it; **Export as PDF…** saves a PDF directly (no print dialog), always in light colours and showing only the note; **Print…** (`Ctrl+P`); **Import Markdown Files…** turns Markdown files into notes in the current folder, including checklists, tables and images that sit next to the file. Images from the web become links (nothing is downloaded), and only images inside the imported file's folder are attached.
+- **Find in note** (`Ctrl+F` while typing in a note): a find bar with a match counter, next/previous (`Enter` / `Shift+Enter`, wrapping around) and Done (`Esc`, leaving the cursor on the match). Ignores case and accents. **Search highlights:** while you search all notes (`Ctrl+Shift+F`, or `Ctrl+F` outside a note), the search words are highlighted in the note you open, which scrolls to the first match.
+- **Checklist extras.** Ticked items move to the bottom of their checklist and unticked ones move back up (Settings → General → "Move checked items to the bottom", on by default; one Undo reverts both the tick and the move). Right-click a checklist for **Check All**, **Uncheck All**, **Move Checked to Bottom** and **Delete Checked Items**.
+- **Link editing.** `Ctrl+K` (or **Link…** in the Aa menu) turns selected text into a link, edits the link under the cursor, or inserts a new link with its own text. Type `example.com` or `name@example.com` and TuxNotes adds the `https://` or `mailto:` part; anything that isn't a web, email or phone link is refused. With the cursor in a link, a small bubble shows the address with **Open**, **Edit** and **Remove**. `Ctrl+click` still opens links directly.
+- **Images and attachments.** Paste a screenshot, drag files in from your file manager, or use the paperclip button. Images show in the note; other files appear as a chip with type, name and size: double-click to open, right-click to open, save a copy or delete. Up to 50 MB per file. File names are searchable. Attachments are stored next to your notes and included in backups. Files no longer used by any note are cleaned up after a day, so undo keeps working.
+- **Tables.** Insert one from the toolbar; right-click a cell to add or delete rows and columns, merge or split cells, or turn the header row on or off. Tab and Shift+Tab move between cells, and Tab in the last cell adds a row. Drag a column border to resize it. Text inside tables is searchable and shows in the note preview.
+- **Settings window** (`Ctrl+,`): sort and grouping options, how new notes start, System/Light/Dark theme, text size, backup, keyboard shortcuts, and an About page.
+- **Google Drive backup and restore**: back up or restore with one click. TuxNotes asks before opening your browser to sign in, then carries on by itself. Automatic daily or weekly backups, and keeps the last N.
+- Rounded window, hideable sidebar, focus mode, resizable panes, Apple-style date sections, drag notes onto folders, and the window remembers its size.
+- Notes, folders, rich text, checklists, pinning, Recently Deleted (30 days) and accent-insensitive search.
+- **App store information.** The packages include an AppStream description with screenshots, so Software centres (GNOME Software, KDE Discover) show TuxNotes properly.
+
+### Security
+- **Restoring a backup** now first checks that it's a believable size, lists no file twice, and fits on the disk with room to spare, so a broken or hostile backup can't fill the disk. The password check accepts at most 256 MB of memory settings (TuxNotes uses 64 MB).
+- Encryption keys, Argon2's working memory and typed passwords are now **wiped from memory** after use (they could otherwise end up in swap or a crash dump).
+
+### Fixed
+- **Search in Chinese, Japanese, Thai** and similar languages found words only at the start of a sentence. Words in these scripts are now found (and highlighted) anywhere in a note.
+- **Pasting files copied in a file manager** (Ctrl+C on a file in Files, then Ctrl+V in a note) did nothing. The files are now attached, like dropping them in.
+- **Keyboard use**: the ⋯ menu now has Pin and Move to Folder…; the Menu key (or Shift+F10) opens the selected note's menu in the list; Escape in a menu returns to where you were; and while a dialog is open, Tab can no longer reach the note behind it.
+- Right-clicking text inside a **checklist or table** showed only TuxNotes' menu, hiding spelling suggestions and Cut/Copy/Paste. Text now always gets the normal menu; checklist actions are on a right-click of the checkbox, and table actions on the toolbar's table button (or a right-click on selected cells).
+- **"New notes start with"** (Settings → General) changed the look of every note, not just new ones. Each note now keeps the first-line style it was created with; notes you already have keep the title look.
+- Moving through the note list with the arrow keys **stopped at every locked note** (its password field took the keyboard). Now Enter or Tab moves into the password field, like into any note, and each locked note's lock screen starts empty.
+- A **collapsed folder's count** now includes the notes in its subfolders (open folders still show their own notes, with the subfolders listed below).
+- The message after locking a note now mentions the **automatic lock after idle time** (Settings → General) instead of only "Lock Now or close".
+- Recently Deleted said "28 days"; it now says **"28 days left"** (and "Removed soon" on the last day).
+- When another program changed your notes while TuxNotes was open, **the open note kept showing the old text** (and typing in it could save that old copy over the change). TuxNotes now notices such changes within a few seconds and shows them, keeping your place in the note.
+- After the computer's clock went backwards (or after restoring notes from a computer whose clock was ahead), **edited notes didn't move to the top** of the list. Edits now always count as newest.
+- **PDF export on computers set to another language** could fail with "printer not found": the built-in PDF printer has a translated name. TuxNotes now asks GTK for that translated name.
+- **A save that failed** (for example on a full disk) was thrown away when you switched notes. Failed saves are now kept, retried by themselves, and retried again with every later save until they succeed.
+- **Search results**: pressing Delete on a result while in Recently Deleted asked to delete it permanently (and then failed); moving a result to another folder made the selection jump. Both now act on the note itself and keep it selected.
+- In the link box, pressing **Enter on Cancel or Remove Link saved the link** instead. Enter now presses the button it's on; in the text fields it still saves.
+- **Automatic backups ran even when nothing had changed**, pushing older, different backups out of the "keep the last N" list, and retried every 15 minutes while offline. They now only run when something changed, and wait longer after each failure (up to 6 hours).
+- Dropping or pasting a **too-large file together with others hid the "too large" message**. It now stays visible, and files over 50 MB are refused right away instead of being read first.
+- Files with **long Chinese, Japanese and other non-Latin names** couldn't be attached ("file name too long"). Long names are now shortened to fit the file system, keeping the extension.
+- Attachments with very long names could be **left out of backups without a warning**. They're included again, and new long names are shortened cleanly.
+- **Export could overwrite a file without asking**: typing a name without ".md"/".pdf" saved to the name with the extension added, replacing an existing file of that name. TuxNotes now asks "Replace …?" first.
+- **Markdown import**: a picture inside a list, quote, table or heading made the imported note read-only and the picture wasn't attached. Pictures are now attached wherever they are, anything the editor can't show is imported as plain text instead, and a file that fails no longer stops the rest or leaves an empty note behind.
+- Emptying Recently Deleted from the sidebar **switched to a different note**. The open note now stays open (unless it was one of the deleted notes).
+- Pressing Escape on a question inside Settings (for example "Disconnect?") **closed all of Settings** instead of just the question.
+- The app **froze while a backup was being made** (seconds to minutes with many pictures), because notes couldn't be saved until the archive was finished. The notes are now only held for the quick database copy. Pictures and other already-compressed files are stored as they are, which makes backups faster.
+- While a search was active, typing in a note made it **jump back to the first match** every time it saved. It now only scrolls when the search words change.
+- **Backups larger than 1 GB** uploaded fine but could never be restored. Backups now upload from disk in 8 MB pieces and continue where they stopped after a dropped connection (instead of starting over), restores download straight to disk, and the restore limit is 64 GB. Transfers only time out when they stall, not after 10 minutes.
+- **Restoring a tampered backup** could make TuxNotes delete or read files outside its own folder (attachment records inside a backup weren't checked). Restore now rejects such backups, TuxNotes never builds a path from an unsafe record, and a backup that was uploaded encrypted must still be encrypted when restored.
+- If the settings file was damaged or lost, **backup encryption silently switched off** and the next automatic backup uploaded unencrypted. TuxNotes now refuses to upload while a backup key is saved but the settings don't say "encrypted", and a single unreadable setting only resets that one setting.
+- When the Google sign-in had expired, backing up (or opening Restore) **hung until TuxNotes was restarted**, and closing the window waited 90 seconds. TuxNotes now disconnects cleanly and the Backup settings say the sign-in expired.
+- An edit that landed at the moment you switched notes (for example a pasted picture finishing) could be saved with the **other note's text**, replacing the first note's content. Each save now stores exactly the text it was made from.
+- **Ctrl+Delete while typing** no longer moves the note to Recently Deleted; it deletes the next word, as everywhere else. It still deletes the note when you're not typing.
+- **Pasting images** (screenshots, copied pictures) with Ctrl+V works in the app. The Linux web engine doesn't hand pasted images to the page, so TuxNotes now reads them from the system clipboard.
+
+### Safety
+- If a note contains something the running version can't show (for example, a note written by a newer TuxNotes), it opens **read-only** with its text visible, so it can't be overwritten by mistake.
+
+### Compatibility
+- **Google Drive backup isn't in the release builds yet**: they don't include Google sign-in, so Settings → Backup says it isn't available. Builds made with your own Google client (docs/google-setup.md) have it.
+- **New app ID: `io.github.Rick8509.TuxNotes`** (was `io.github.tuxnotes.TuxNotes`). Notes, attachments, settings and window size move to the new folders by themselves the first time this version starts (`~/.local/share/io.github.Rick8509.TuxNotes/` and `~/.config/io.github.Rick8509.TuxNotes/`), and keyring entries move the first time they're used. If the old version is still open, TuxNotes asks you to close it first.
+- Notes created with "New notes start with: Heading" or "Body" open read-only in TuxNotes builds from before this version (notes with the default Title look are unaffected).
+- Backups now use **format 2**, which includes attachments. Older backups (format 1) still restore normally.
+- Once this version has opened your notes, its database (schema 4) can't be opened by earlier TuxNotes builds. Update every computer you use.
+- Notes that contain **tables** can't be shown by TuxNotes builds from before table support. Update every computer you use before restoring a backup that contains tables.

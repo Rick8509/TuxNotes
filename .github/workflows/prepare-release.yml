@@ -1,0 +1,112 @@
+name: Prepare Release
+
+# Step 1 of a release (docs/RELEASING.md): Actions → "Prepare Release" → Run workflow.
+# Raises the version on dev, moves the changelog's Unreleased notes under it and opens
+# the pull request "Release vX.Y.Z" from dev to main. Merging that pull request
+# publishes the release ("Build and Publish", build-publish.yml).
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "New version: patch = fixes (0.1.0 → 0.1.1), minor = new features (→ 0.2.0), major = big milestone (→ 1.0.0), keep = the current version (first release, or after closing a release pull request)"
+        type: choice
+        options: [patch, minor, major, keep]
+        default: patch
+      version:
+        description: "Or type an exact version such as 1.0.0 (leave empty to use the choice above)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write # commit the new version to dev
+  pull-requests: write # open the release pull request
+  actions: write # start the checks on the release commit
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Prepare the release pull request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only from dev
+        if: github.ref_name != 'dev'
+        run: |
+          echo "::error::Run this workflow from the dev branch (\"Use workflow from: dev\")."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Stop if a release is already waiting
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          waiting=$(gh pr list --base main --head dev --state open --json title,url \
+            --jq '.[] | select(.title | startswith("Release v")) | .url')
+          if [ -n "$waiting" ]; then
+            echo "::error::A release is already waiting: $waiting. Merge it, or close it and run this again."
+            exit 1
+          fi
+
+      - name: Raise the version and move the changelog notes
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+          EXACT: ${{ inputs.version }}
+        run: node scripts/release.mjs prepare "${EXACT:-$BUMP}" --notes-out "$RUNNER_TEMP/notes.md"
+
+      - name: Stop if this version was already released
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "::error::v$VERSION was already released. Choose a higher version."
+            exit 1
+          fi
+
+      - name: Commit to dev
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The commit is by the person who started the release.
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR_ID+$GITHUB_ACTOR@users.noreply.github.com"
+          # Nothing changes when re-opening a release on the same day with no new notes.
+          if ! git diff --quiet; then
+            git commit -am "Release v$VERSION"
+            git push origin HEAD:dev
+          fi
+
+      - name: Run the checks on the release commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Pushes made by this workflow don't start other workflows by themselves.
+        run: gh workflow run checks.yml --ref dev
+
+      - name: Open the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "Merging this pull request publishes **TuxNotes $VERSION**."
+            echo
+            echo "1. If GitHub shows **Approve and run workflows** below, click it (GitHub asks this for pull requests opened by a bot). Then wait until the checks are green (about 10 minutes)."
+            echo "2. Read the notes below. To change them, edit \`CHANGELOG.md\` on \`dev\`."
+            echo "3. Click **Merge pull request** (merge commit). The packages are built and published in about 15 minutes: watch **Actions → Build and Publish**."
+            echo
+            echo "## What's new in $VERSION"
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } > "$RUNNER_TEMP/body.md"
+          url=$(gh pr create --base main --head dev --title "Release v$VERSION" --body-file "$RUNNER_TEMP/body.md")
+          echo "### Release v$VERSION is ready to merge: $url" >> "$GITHUB_STEP_SUMMARY"

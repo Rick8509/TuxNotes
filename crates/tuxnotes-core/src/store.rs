@@ -8,6 +8,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::crypto::SecretKey;
 use crate::error::{Error, Result};
 use crate::migrations;
 use crate::models::{Folder, Note, NoteFilter, NoteSummary};
@@ -17,6 +18,8 @@ use crate::text;
 pub const DEFAULT_FOLDER_NAME: &str = "Notes";
 /// Maximum folder name length in characters.
 pub const MAX_FOLDER_NAME_CHARS: usize = 100;
+/// How deep folders can be nested.
+pub const MAX_FOLDER_DEPTH: usize = 5;
 /// Maximum size of one note's serialized document (protects against runaway input).
 pub const MAX_CONTENT_BYTES: usize = 20 * 1024 * 1024;
 /// How long notes stay in "Recently Deleted" before they are purged.
@@ -24,16 +27,20 @@ pub const TRASH_RETENTION_DAYS: i64 = 30;
 
 const DAY_MS: i64 = 24 * 60 * 60 * 1000;
 
+const FOLDER_COLUMNS: &str = "f.id, f.name, f.is_default, f.sort_order, f.created_at, f.updated_at,
+     (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id AND n.deleted_at IS NULL), f.parent_id";
 const SUMMARY_COLUMNS: &str =
-    "id, folder_id, title, snippet, is_pinned, created_at, updated_at, deleted_at";
-const NOTE_COLUMNS: &str =
-    "id, folder_id, title, content_json, is_pinned, created_at, updated_at, deleted_at";
+    "id, folder_id, title, snippet, is_pinned, created_at, updated_at, deleted_at,
+     (locked_blob IS NOT NULL)";
+const NOTE_COLUMNS: &str = "id, folder_id, title, content_json, is_pinned, created_at, updated_at, deleted_at, locked_blob";
 
 pub struct Store {
-    conn: Connection,
+    pub(crate) conn: Connection,
     /// Last timestamp handed out; guarantees strictly increasing timestamps
     /// so "most recently edited" ordering is stable even within one millisecond.
     last_ts: Cell<i64>,
+    /// The key for locked notes while they're unlocked (memory only; see `lock.rs`).
+    pub(crate) notes_key: Option<SecretKey>,
 }
 
 impl Store {
@@ -52,25 +59,39 @@ impl Store {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         conn.pragma_update_and_check(None, "journal_mode", "WAL", |row| row.get::<_, String>(0))?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
+        // Overwrite deleted data with zeros, so text from a note that was locked
+        // doesn't linger in free pages of the file.
+        conn.pragma_update(None, "secure_delete", "ON")?;
         migrations::migrate(&mut conn)?;
 
         let store = Store {
             conn,
             last_ts: Cell::new(0),
+            notes_key: None,
         };
+        // Continue after the newest time already stored, so edits still sort as newest
+        // after the clock went back (or after restoring notes from a computer whose clock
+        // was ahead). A time more than a day ahead is ignored as a broken clock.
+        let newest = store.last_change_at()?.unwrap_or(0);
+        if newest <= wall_clock_ms() + DAY_MS {
+            store.last_ts.set(newest);
+        }
         store.ensure_default_folder()?;
         Ok(store)
     }
 
-    /// Current time in Unix milliseconds, strictly increasing per store.
-    fn now(&self) -> i64 {
-        let wall = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
-        let ts = wall.max(self.last_ts.get() + 1);
+    /// Current time in Unix milliseconds, strictly increasing per store (and never
+    /// earlier than what's already stored, within reason).
+    pub(crate) fn now(&self) -> i64 {
+        let ts = wall_clock_ms().max(self.last_ts.get() + 1);
         self.last_ts.set(ts);
         ts
+    }
+
+    #[doc(hidden)]
+    /// Raw database access for tests that check what is actually stored.
+    pub fn conn_for_tests(&self) -> &Connection {
+        &self.conn
     }
 
     fn new_id() -> String {
@@ -108,14 +129,13 @@ impl Store {
             })?)
     }
 
-    /// All folders: the default folder first, then by creation order.
+    /// All folders, each level in its own order (the default folder first at the top level).
+    /// The tree is built from `parent_id`.
     pub fn list_folders(&self) -> Result<Vec<Folder>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT f.id, f.name, f.is_default, f.sort_order, f.created_at, f.updated_at,
-                    (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id AND n.deleted_at IS NULL)
-             FROM folders f
-             ORDER BY f.is_default DESC, f.sort_order, f.name COLLATE NOCASE",
-        )?;
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT {FOLDER_COLUMNS} FROM folders f
+             ORDER BY f.is_default DESC, f.sort_order, f.name COLLATE NOCASE"
+        ))?;
         let folders = stmt
             .query_map([], folder_from_row)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -125,9 +145,7 @@ impl Store {
     pub fn get_folder(&self, id: &str) -> Result<Folder> {
         self.conn
             .query_row(
-                "SELECT f.id, f.name, f.is_default, f.sort_order, f.created_at, f.updated_at,
-                        (SELECT COUNT(*) FROM notes n WHERE n.folder_id = f.id AND n.deleted_at IS NULL)
-                 FROM folders f WHERE f.id = ?1",
+                &format!("SELECT {FOLDER_COLUMNS} FROM folders f WHERE f.id = ?1"),
                 [id],
                 folder_from_row,
             )
@@ -135,14 +153,28 @@ impl Store {
             .ok_or_else(|| Error::not_found("folder", id))
     }
 
+    /// A new folder at the top level.
     pub fn create_folder(&self, name: &str) -> Result<Folder> {
-        let name = self.validate_folder_name(name, None)?;
+        self.create_subfolder(name, None)
+    }
+
+    /// A new folder inside `parent_id` (or at the top level), placed last among its siblings.
+    pub fn create_subfolder(&self, name: &str, parent_id: Option<&str>) -> Result<Folder> {
+        if let Some(parent) = parent_id {
+            self.get_folder(parent)?;
+            if self.folder_depth(parent)? >= MAX_FOLDER_DEPTH {
+                return Err(Error::invalid(format!(
+                    "Folders can be nested at most {MAX_FOLDER_DEPTH} levels deep."
+                )));
+            }
+        }
+        let name = self.validate_folder_name(name, parent_id, None)?;
         let now = self.now();
         let id = Self::new_id();
         self.conn.execute(
-            "INSERT INTO folders (id, name, is_default, sort_order, created_at, updated_at)
-             VALUES (?1, ?2, 0, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM folders), ?3, ?3)",
-            params![id, name, now],
+            "INSERT INTO folders (id, name, is_default, parent_id, sort_order, created_at, updated_at)
+             VALUES (?1, ?2, 0, ?3, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM folders), ?4, ?4)",
+            params![id, name, parent_id, now],
         )?;
         self.get_folder(&id)
     }
@@ -152,7 +184,7 @@ impl Store {
         if folder.is_default {
             return Err(Error::invalid("The default folder can't be renamed."));
         }
-        let name = self.validate_folder_name(name, Some(id))?;
+        let name = self.validate_folder_name(name, folder.parent_id.as_deref(), Some(id))?;
         self.conn.execute(
             "UPDATE folders SET name = ?2, updated_at = ?3 WHERE id = ?1",
             params![id, name, self.now()],
@@ -160,28 +192,144 @@ impl Store {
         self.get_folder(id)
     }
 
-    /// Delete a folder. Its notes move to "Recently Deleted" (and to the default
-    /// folder, so they have somewhere to go if restored). Returns how many notes moved.
+    /// Move a folder into `parent_id` (or to the top level) at position `index` among
+    /// its new siblings. Used for both nesting and reordering by drag and drop.
+    pub fn move_folder(
+        &mut self,
+        id: &str,
+        parent_id: Option<&str>,
+        index: usize,
+    ) -> Result<Folder> {
+        let folder = self.get_folder(id)?;
+        if folder.is_default {
+            return Err(Error::invalid("The default folder can't be moved."));
+        }
+        if let Some(parent) = parent_id {
+            self.get_folder(parent)?;
+            if parent == id || self.descendant_ids(id)?.iter().any(|d| d == parent) {
+                return Err(Error::invalid("A folder can't be moved into itself."));
+            }
+            if self.folder_depth(parent)? + self.subtree_height(id)? > MAX_FOLDER_DEPTH {
+                return Err(Error::invalid(format!(
+                    "Folders can be nested at most {MAX_FOLDER_DEPTH} levels deep."
+                )));
+            }
+        }
+        self.validate_folder_name(&folder.name, parent_id, Some(id))?;
+
+        // New order of the siblings, with the moved folder inserted at `index`.
+        let mut siblings: Vec<String> = self
+            .list_folders()?
+            .into_iter()
+            .filter(|f| f.parent_id.as_deref() == parent_id && f.id != id && !f.is_default)
+            .map(|f| f.id)
+            .collect();
+        siblings.insert(index.min(siblings.len()), id.to_string());
+
+        let now = self.now();
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "UPDATE folders SET parent_id = ?2, updated_at = ?3 WHERE id = ?1",
+            params![id, parent_id, now],
+        )?;
+        for (i, sibling) in siblings.iter().enumerate() {
+            tx.execute(
+                "UPDATE folders SET sort_order = ?2 WHERE id = ?1",
+                params![sibling, i as i64 + 1],
+            )?;
+        }
+        tx.commit()?;
+        self.get_folder(id)
+    }
+
+    /// Delete a folder and all its subfolders. Their notes move to "Recently Deleted"
+    /// (and to the default folder, so they have somewhere to go if restored).
+    /// Returns how many notes moved.
     pub fn delete_folder(&mut self, id: &str) -> Result<usize> {
         let folder = self.get_folder(id)?;
         if folder.is_default {
             return Err(Error::invalid("The default folder can't be deleted."));
         }
+        let mut doomed = self.descendant_ids(id)?;
+        doomed.insert(0, id.to_string());
         let default_id = self.default_folder_id()?;
         let now = self.now();
         let tx = self.conn.transaction()?;
-        let moved = tx.execute(
-            "UPDATE notes
-             SET folder_id = ?2, deleted_at = COALESCE(deleted_at, ?3), is_pinned = 0
-             WHERE folder_id = ?1",
-            params![id, default_id, now],
-        )?;
-        tx.execute("DELETE FROM folders WHERE id = ?1", [id])?;
+        let mut moved = 0;
+        for folder_id in &doomed {
+            moved += tx.execute(
+                "UPDATE notes
+                 SET folder_id = ?2, deleted_at = COALESCE(deleted_at, ?3), is_pinned = 0
+                 WHERE folder_id = ?1",
+                params![folder_id, default_id, now],
+            )?;
+        }
+        // Deepest first, so no folder is removed before its subfolders.
+        for folder_id in doomed.iter().rev() {
+            tx.execute("DELETE FROM folders WHERE id = ?1", [folder_id])?;
+        }
         tx.commit()?;
         Ok(moved)
     }
 
-    fn validate_folder_name(&self, name: &str, existing_id: Option<&str>) -> Result<String> {
+    /// Every folder inside `id`, at any depth (parents before their children).
+    pub fn descendant_ids(&self, id: &str) -> Result<Vec<String>> {
+        let folders = self.list_folders()?;
+        let mut out: Vec<String> = Vec::new();
+        let mut queue = vec![id.to_string()];
+        while let Some(current) = queue.pop() {
+            for child in folders
+                .iter()
+                .filter(|f| f.parent_id.as_deref() == Some(current.as_str()))
+            {
+                if out.contains(&child.id) || child.id == id {
+                    continue; // never loop, even on damaged data
+                }
+                out.push(child.id.clone());
+                queue.push(child.id.clone());
+            }
+        }
+        Ok(out)
+    }
+
+    /// 1 for a top-level folder, 2 for a folder inside it, and so on.
+    fn folder_depth(&self, id: &str) -> Result<usize> {
+        let mut depth = 1;
+        let mut current = self.get_folder(id)?;
+        while let Some(parent) = current.parent_id.clone() {
+            depth += 1;
+            if depth > 64 {
+                break; // damaged data: stop rather than loop
+            }
+            current = self.get_folder(&parent)?;
+        }
+        Ok(depth)
+    }
+
+    /// Levels in a folder's subtree: 1 for a folder without subfolders.
+    fn subtree_height(&self, id: &str) -> Result<usize> {
+        let mut max = 1;
+        for d in self.descendant_ids(id)? {
+            let mut levels = 1;
+            let mut current = self.get_folder(&d)?;
+            while let Some(parent) = current.parent_id.clone() {
+                levels += 1;
+                if parent == id || levels > 64 {
+                    break;
+                }
+                current = self.get_folder(&parent)?;
+            }
+            max = max.max(levels);
+        }
+        Ok(max)
+    }
+
+    fn validate_folder_name(
+        &self,
+        name: &str,
+        parent_id: Option<&str>,
+        existing_id: Option<&str>,
+    ) -> Result<String> {
         let name = name.trim();
         if name.is_empty() {
             return Err(Error::invalid("Folder name can't be empty."));
@@ -191,15 +339,17 @@ impl Store {
                 "Folder name can't be longer than {MAX_FOLDER_NAME_CHARS} characters."
             )));
         }
-        // SQLite's NOCASE only folds ASCII, so compare in Rust for full Unicode.
+        // Names must be unique among siblings. SQLite's NOCASE only folds ASCII,
+        // so compare in Rust for full Unicode.
         let lower = name.to_lowercase();
-        let taken = self
-            .list_folders()?
-            .into_iter()
-            .any(|f| Some(f.id.as_str()) != existing_id && f.name.to_lowercase() == lower);
+        let taken = self.list_folders()?.into_iter().any(|f| {
+            Some(f.id.as_str()) != existing_id
+                && f.parent_id.as_deref() == parent_id
+                && f.name.to_lowercase() == lower
+        });
         if taken {
             return Err(Error::invalid(format!(
-                "A folder named \"{name}\" already exists."
+                "A folder named \"{name}\" already exists here."
             )));
         }
         Ok(name.to_string())
@@ -224,13 +374,16 @@ impl Store {
         self.get_note(&id)
     }
 
+    /// A note with its document. For a locked note the document is decrypted when
+    /// locked notes are unlocked, and `null` otherwise.
     pub fn get_note(&self, id: &str) -> Result<Note> {
-        self.conn
+        let (mut note, json, blob) = self
+            .conn
             .query_row(
                 &format!("SELECT {NOTE_COLUMNS} FROM notes WHERE id = ?1"),
                 [id],
                 |row| {
-                    let json: String = row.get(3)?;
+                    let blob: Option<Vec<u8>> = row.get(8)?;
                     Ok((
                         Note {
                             id: row.get(0)?,
@@ -241,17 +394,23 @@ impl Store {
                             created_at: row.get(5)?,
                             updated_at: row.get(6)?,
                             deleted_at: row.get(7)?,
+                            is_locked: blob.is_some(),
                         },
-                        json,
+                        row.get::<_, String>(3)?,
+                        blob,
                     ))
                 },
             )
             .optional()?
-            .ok_or_else(|| Error::not_found("note", id))
-            .and_then(|(mut note, json)| {
-                note.content = serde_json::from_str(&json)?;
-                Ok(note)
-            })
+            .ok_or_else(|| Error::not_found("note", id))?;
+        note.content = match blob {
+            None => serde_json::from_str(&json)?,
+            Some(blob) => match &self.notes_key {
+                Some(key) => self.decrypt_note(key, id, &blob)?,
+                None => Value::Null,
+            },
+        };
+        Ok(note)
     }
 
     pub fn get_note_summary(&self, id: &str) -> Result<NoteSummary> {
@@ -276,6 +435,11 @@ impl Store {
             return Err(Error::invalid("This note is too large to save."));
         }
         self.require_active(id)?;
+        if self.is_locked(id)? {
+            let key = self.require_notes_key()?;
+            self.write_locked(key, id, content, true)?;
+            return self.get_note_summary(id);
+        }
 
         let extracted = text::extract(content);
         self.conn.execute(
@@ -292,6 +456,21 @@ impl Store {
             ],
         )?;
         self.get_note_summary(id)
+    }
+
+    /// Copy a note (same folder, same content, not pinned). Attachments are shared by id,
+    /// which is safe: they're only removed once no note refers to them.
+    pub fn duplicate_note(&self, id: &str) -> Result<Note> {
+        self.require_active(id)?;
+        if self.is_locked(id)? {
+            return Err(Error::invalid(
+                "Locked notes can't be duplicated. Remove the lock first.",
+            ));
+        }
+        let original = self.get_note(id)?;
+        let copy = self.create_note(Some(&original.folder_id))?;
+        self.update_note_content(&copy.id, &original.content)?;
+        self.get_note(&copy.id)
     }
 
     /// Pinning does not change `updated_at`, matching how Apple Notes behaves.
@@ -345,6 +524,48 @@ impl Store {
         }
         self.conn.execute("DELETE FROM notes WHERE id = ?1", [id])?;
         Ok(())
+    }
+
+    /// Delete a note that was created but never given any content (like Apple Notes
+    /// does when you leave an empty new note). Returns whether it was deleted.
+    pub fn discard_note_if_blank(&self, id: &str) -> Result<bool> {
+        // Locked notes are never blank (their visible document is just empty).
+        let row: Option<(String, Option<i64>)> = self
+            .conn
+            .query_row(
+                "SELECT content_json, deleted_at FROM notes WHERE id = ?1 AND locked_blob IS NULL",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        let Some((json, None)) = row else {
+            return Ok(false); // missing or already in the trash
+        };
+        let doc: Value = serde_json::from_str(&json)?;
+        if !text::is_blank(&doc) {
+            return Ok(false);
+        }
+        self.conn.execute("DELETE FROM notes WHERE id = ?1", [id])?;
+        Ok(true)
+    }
+
+    /// Remove every blank note (run at startup to clean up after an unclean exit).
+    pub fn discard_blank_notes(&self) -> Result<usize> {
+        let ids: Vec<String> = self
+            .conn
+            .prepare(
+                "SELECT id FROM notes
+                 WHERE deleted_at IS NULL AND content_text = '' AND locked_blob IS NULL",
+            )?
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        let mut removed = 0;
+        for id in ids {
+            if self.discard_note_if_blank(&id)? {
+                removed += 1;
+            }
+        }
+        Ok(removed)
     }
 
     /// Permanently delete everything in "Recently Deleted". Returns the count.
@@ -408,25 +629,51 @@ impl Store {
     /// Full-text search over titles and bodies of notes not in the trash.
     /// Every word is matched as a prefix, so "gro mil" finds "Groceries: milk".
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<NoteSummary>> {
-        let Some(fts_query) = build_fts_query(query) else {
+        // Scripts written without spaces (Chinese, Japanese, Thai…) are one long "word"
+        // to the index, which only matches from its start: find such words anywhere.
+        let (unspaced, spaced): (Vec<&str>, Vec<&str>) = query
+            .split_whitespace()
+            .partition(|w| w.chars().any(is_unspaced_script));
+        let fts_query = build_fts_query(&spaced.join(" "));
+        if fts_query.is_none() && unspaced.is_empty() {
             return Ok(Vec::new());
-        };
-        let mut stmt = self.conn.prepare(
+        }
+        let mut sql = String::from(
             "SELECT n.id, n.folder_id, n.title, n.snippet, n.is_pinned,
-                    n.created_at, n.updated_at, n.deleted_at
-             FROM notes_fts
-             JOIN notes n ON n.seq = notes_fts.rowid
-             WHERE notes_fts MATCH ?1 AND n.deleted_at IS NULL
-             ORDER BY bm25(notes_fts, 10.0, 1.0), n.updated_at DESC
-             LIMIT ?2",
-        )?;
+                    n.created_at, n.updated_at, n.deleted_at, (n.locked_blob IS NOT NULL)
+             FROM notes n",
+        );
+        let mut args: Vec<String> = Vec::new();
+        if fts_query.is_some() {
+            sql.push_str(" JOIN notes_fts ON notes_fts.rowid = n.seq");
+        }
+        sql.push_str(" WHERE n.deleted_at IS NULL");
+        if let Some(q) = &fts_query {
+            args.push(q.clone());
+            sql.push_str(&format!(" AND notes_fts MATCH ?{}", args.len()));
+        }
+        for word in &unspaced {
+            args.push(word.to_string());
+            let n = args.len();
+            sql.push_str(&format!(
+                " AND (instr(n.title, ?{n}) > 0 OR instr(n.content_text, ?{n}) > 0)"
+            ));
+        }
+        sql.push_str(if fts_query.is_some() {
+            " ORDER BY bm25(notes_fts, 10.0, 1.0), n.updated_at DESC"
+        } else {
+            " ORDER BY n.updated_at DESC, n.seq DESC"
+        });
+        args.push(limit.to_string());
+        sql.push_str(&format!(" LIMIT CAST(?{} AS INTEGER)", args.len()));
+        let mut stmt = self.conn.prepare(&sql)?;
         let rows = stmt
-            .query_map(params![fts_query, limit as i64], summary_from_row)?
+            .query_map(rusqlite::params_from_iter(args.iter()), summary_from_row)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }
 
-    fn require_active(&self, id: &str) -> Result<()> {
+    pub(crate) fn require_active(&self, id: &str) -> Result<()> {
         if self.get_note_summary(id)?.deleted_at.is_some() {
             return Err(Error::invalid(
                 "This note is in Recently Deleted. Restore it to make changes.",
@@ -436,6 +683,65 @@ impl Store {
     }
 
     // ------------------------------------------------------------------ backups
+
+    /// Number of folders and notes (including notes in Recently Deleted).
+    pub fn counts(&self) -> Result<(i64, i64)> {
+        Ok(self.conn.query_row(
+            "SELECT (SELECT COUNT(*) FROM folders), (SELECT COUNT(*) FROM notes)",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?)
+    }
+
+    /// Rows changed through this store since it was opened. Comparing two readings tells
+    /// whether anything changed in between (e.g. since the last backup).
+    pub fn change_count(&self) -> u64 {
+        self.conn.total_changes()
+    }
+
+    /// A number that changes when another connection (another program) commits to the
+    /// database, and stays the same for this store's own changes. Lets the app notice
+    /// notes changed from outside while it's open.
+    pub fn data_version(&self) -> Result<i64> {
+        Ok(self
+            .conn
+            .query_row("PRAGMA data_version", [], |row| row.get(0))?)
+    }
+
+    /// The newest time anything was edited, created, deleted or renamed (Unix ms).
+    /// Doesn't see every change (moving a note between folders keeps its time); use
+    /// together with [`Store::change_count`].
+    pub fn last_change_at(&self) -> Result<Option<i64>> {
+        Ok(self.conn.query_row(
+            "SELECT MAX(t) FROM (
+                SELECT MAX(updated_at) AS t FROM notes
+                UNION ALL SELECT MAX(deleted_at) FROM notes
+                UNION ALL SELECT MAX(updated_at) FROM folders
+                UNION ALL SELECT MAX(created_at) FROM attachments
+             )",
+            [],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Run SQLite's integrity check, including the full-text index.
+    pub fn check_integrity(&self) -> Result<()> {
+        let result: String = self
+            .conn
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+        if result != "ok" {
+            return Err(Error::InvalidBackup(format!(
+                "The database is damaged: {result}"
+            )));
+        }
+        self.conn
+            .execute(
+                "INSERT INTO notes_fts(notes_fts) VALUES ('integrity-check')",
+                [],
+            )
+            .map_err(|e| Error::InvalidBackup(format!("The search index is damaged: {e}")))?;
+        Ok(())
+    }
 
     /// Write a consistent, compacted copy of the whole database to `dest`.
     /// Safe to call while the app is running. `dest` must not exist yet.
@@ -453,6 +759,29 @@ impl Store {
         self.conn.execute("VACUUM INTO ?1", [dest])?;
         Ok(())
     }
+}
+
+fn wall_clock_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Letters of scripts usually written without spaces between words.
+fn is_unspaced_script(c: char) -> bool {
+    matches!(c as u32,
+        0x3040..=0x30FF   // Hiragana, Katakana
+        | 0x31F0..=0x31FF // Katakana phonetic extensions
+        | 0x3400..=0x4DBF // CJK extension A
+        | 0x4E00..=0x9FFF // CJK unified ideographs
+        | 0xF900..=0xFAFF // CJK compatibility ideographs
+        | 0xFF66..=0xFF9F // half-width Katakana
+        | 0x20000..=0x2FFFF // CJK extensions B and later
+        | 0x0E00..=0x0EFF // Thai, Lao
+        | 0x1000..=0x109F // Myanmar
+        | 0x1780..=0x17FF // Khmer
+    )
 }
 
 /// Turn user input into a safe FTS5 query: each word becomes a quoted prefix term.
@@ -473,6 +802,7 @@ fn folder_from_row(row: &Row<'_>) -> rusqlite::Result<Folder> {
         created_at: row.get(4)?,
         updated_at: row.get(5)?,
         note_count: row.get(6)?,
+        parent_id: row.get(7)?,
     })
 }
 
@@ -486,6 +816,7 @@ fn summary_from_row(row: &Row<'_>) -> rusqlite::Result<NoteSummary> {
         created_at: row.get(5)?,
         updated_at: row.get(6)?,
         deleted_at: row.get(7)?,
+        is_locked: row.get(8)?,
     })
 }
 

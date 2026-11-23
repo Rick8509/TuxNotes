@@ -2,8 +2,8 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TuxNotes",
   "mainBinaryName": "tuxnotes",
-  "version": "0.1.0",
-  "identifier": "io.github.tuxnotes.TuxNotes",
+  "version": "../package.json",
+  "identifier": "io.github.Rick8509.TuxNotes",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -17,22 +17,28 @@
         "title": "TuxNotes",
         "width": 1100,
         "height": 720,
-        "minWidth": 720,
-        "minHeight": 480,
+        "minWidth": 640,
+        "minHeight": 420,
         "decorations": false,
-        "transparent": false
+        "transparent": true,
+        "dragDropEnabled": false,
+        "zoomHotkeysEnabled": true
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: attachment: http://attachment.localhost; font-src 'self' data:"
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "rpm", "appimage"],
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage"
+    ],
     "category": "Productivity",
     "shortDescription": "Open notes for Linux",
-    "longDescription": "TuxNotes is a lightweight, local-first notes app for Linux with a clean three-pane design, rich text, checklists, fast search and Google Drive backups.",
+    "longDescription": "TuxNotes is a lightweight, local-first notes app for Linux with a clean three-pane design, rich text, checklists, tables, attachments, fast search and password-locked notes.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,7 +47,20 @@
     ],
     "linux": {
       "deb": {
-        "depends": []
+        "depends": [],
+        "files": {
+          "/usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml": "../packaging/io.github.Rick8509.TuxNotes.metainfo.xml"
+        }
+      },
+      "rpm": {
+        "files": {
+          "/usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml": "../packaging/io.github.Rick8509.TuxNotes.metainfo.xml"
+        }
+      },
+      "appimage": {
+        "files": {
+          "/usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml": "../packaging/io.github.Rick8509.TuxNotes.metainfo.xml"
+        }
       }
     }
   }

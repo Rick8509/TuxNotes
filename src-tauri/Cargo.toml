@@ -16,8 +16,24 @@ tauri-build = { version = "2.5", features = [] }
 
 [dependencies]
 tuxnotes-core = { path = "../crates/tuxnotes-core" }
+tuxnotes-gdrive = { path = "../crates/tuxnotes-gdrive" }
 tauri = { version = "2.12", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
+keyring = { version = "3", features = ["async-secret-service", "tokio", "crypto-rust"] }
+reqwest.workspace = true
+tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+zeroize.workspace = true
 log = "0.4"
+# Same folder rules as Tauri, for moving data from the old app ID (legacy_id.rs).
+dirs = "7"
 env_logger = "0.11"
+
+# Silent "Export as PDF" uses WebKitGTK's print engine directly (same versions as Tauri's).
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = "2.0"
+gtk = "0.18"

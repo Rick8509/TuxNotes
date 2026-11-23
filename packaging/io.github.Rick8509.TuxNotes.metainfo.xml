@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- App store information (AppStream). Installed to /usr/share/metainfo/ by every package.
+     The release tool (scripts/release.mjs) adds a <release> entry for each version. -->
+<component type="desktop-application">
+  <id>io.github.Rick8509.TuxNotes</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>TuxNotes</name>
+  <summary>Write and organize notes, checklists and tables</summary>
+  <developer id="io.github.rick8509">
+    <name>Rick8509</name>
+  </developer>
+
+  <description>
+    <p>
+      TuxNotes is a clean, fast notes app for Linux. Notes are kept in folders on your
+      computer and saved as you type. Everything works offline.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Folders and subfolders, pinned notes and a Recently Deleted folder</li>
+      <li>Headings, lists, checklists, tables and links</li>
+      <li>Images and file attachments: paste, drag in or attach</li>
+      <li>Instant search across all notes, with highlights in the note</li>
+      <li>Password-locked notes, encrypted on your computer</li>
+      <li>Export to Markdown or PDF, print, and import Markdown files</li>
+      <li>Light and dark look, keyboard shortcuts for everything</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">TuxNotes.desktop</launchable>
+  <provides>
+    <binary>tuxnotes</binary>
+  </provides>
+
+  <categories>
+    <category>Office</category>
+    <category>Utility</category>
+  </categories>
+  <keywords>
+    <keyword>notes</keyword>
+    <keyword>notebook</keyword>
+    <keyword>checklist</keyword>
+    <keyword>to-do</keyword>
+    <keyword>markdown</keyword>
+  </keywords>
+
+  <url type="homepage">https://github.com/Rick8509/TuxNotes</url>
+  <url type="bugtracker">https://github.com/Rick8509/TuxNotes/issues</url>
+  <url type="vcs-browser">https://github.com/Rick8509/TuxNotes</url>
+
+  <screenshots>
+    <screenshot type="default">
+      <caption>Notes in folders, with tables and checklists</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/notes-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Dark look</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/checklist-dark.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Search across all notes</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/search-light.png</image>
+    </screenshot>
+  </screenshots>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f6d365</color>
+    <color type="primary" scheme_preference="dark">#7a5b00</color>
+  </branding>
+
+  <requires>
+    <display_length compare="ge">640</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.1.0" date="2026-11-23">
+      <url type="details">https://github.com/Rick8509/TuxNotes/releases/tag/v0.1.0</url>
+    </release>
+  </releases>
+</component>

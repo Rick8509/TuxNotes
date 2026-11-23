@@ -158,7 +158,7 @@ src/                    Svelte 5 + TipTap user interface
 
 ## Development checks
 
-Run these before committing. CI runs the same checks on every push to `dev` and `main` and on pull requests.
+Run these before committing. CI runs the same checks on every push to `dev` and `main` and on pull requests. Pull requests go to `dev`; `main` only receives releases.
 
 ```bash
 cargo fmt --all                   # format Rust code
@@ -172,13 +172,7 @@ The browser tests drive the app in Google Chrome or Chromium with the mock backe
 
 ## Releasing
 
-Push a version tag; GitHub Actions builds the Linux packages and creates a draft release:
-
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-Bump the version first in `package.json` and `Cargo.toml` (workspace); `tauri.conf.json` reads it from `package.json`. A test fails if the two differ, and the release refuses to build when the tag doesn't match the version.
+Releases are published from GitHub with one click: **Actions → Release → Run workflow**, then merge the pull request it opens. The packages are built, signed and published automatically. The full playbook, including test runs and what to do when something fails, is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Roadmap
 

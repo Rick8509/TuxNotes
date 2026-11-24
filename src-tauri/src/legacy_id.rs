@@ -14,6 +14,14 @@ use std::path::{Path, PathBuf};
 
 /// The app ID before 0.1.0 was published.
 pub const LEGACY_ID: &str = "io.github.tuxnotes.TuxNotes";
+/// The app ID of TuxNotes releases. Only this app takes over the old folders: other
+/// builds (TuxNotes Dev, `io.github.Rick8509.TuxNotes.Dev`) keep their own.
+pub const CURRENT_ID: &str = "io.github.Rick8509.TuxNotes";
+
+/// Whether the app with this ID should take over data from [`LEGACY_ID`].
+pub fn takes_over_legacy_data(app_id: &str) -> bool {
+    app_id == CURRENT_ID
+}
 
 /// What happened to one folder.
 #[derive(Debug, PartialEq, Eq)]
@@ -82,7 +90,7 @@ pub fn file_in_use(file: &Path) -> bool {
 /// update is still running: nothing is moved, and the caller should ask the user to
 /// close it first (otherwise this TuxNotes would start without the notes).
 pub fn migrate(new_id: &str) -> bool {
-    if new_id == LEGACY_ID {
+    if !takes_over_legacy_data(new_id) {
         return true;
     }
     let Some(data) = dirs::data_dir() else {
@@ -223,5 +231,19 @@ mod tests {
         let conf: serde_json::Value =
             serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
         assert_eq!(conf["identifier"], NEW_ID);
+        assert_eq!(CURRENT_ID, NEW_ID);
+    }
+
+    #[test]
+    fn only_the_real_app_takes_over_the_old_folders() {
+        let dev: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.dev.conf.json")).unwrap();
+        let dev_id = dev["identifier"].as_str().unwrap();
+        assert_eq!(dev_id, "io.github.Rick8509.TuxNotes.Dev");
+        assert!(takes_over_legacy_data(NEW_ID));
+        assert!(!takes_over_legacy_data(dev_id));
+        assert!(!takes_over_legacy_data(LEGACY_ID));
+        // migrate() returns before looking at any folder for other apps.
+        assert!(migrate(dev_id));
     }
 }

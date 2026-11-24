@@ -8,6 +8,7 @@
   import { sameFilter } from "../types";
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
   import Resizer from "./Resizer.svelte";
+  import { identity } from "../stores/identity.svelte";
 
   let renamingId = $state<string | null>(null);
   let draftName = $state("");
@@ -200,7 +201,9 @@
   inert={!ui.sidebarShown}
 >
   <header class="header" data-tauri-drag-region>
-    <span class="brand" data-tauri-drag-region>TuxNotes</span>
+    <span class="brand" data-tauri-drag-region>
+      TuxNotes{#if identity.dev}<span class="dev-badge" title="{identity.name} {identity.version}: a test build with its own notes">DEV</span>{/if}
+    </span>
     <button class="icon-btn" title="Hide sidebar (Ctrl+Alt+S)" aria-label="Hide sidebar" onclick={() => ui.toggleSidebar()}>
       <PanelLeftClose size={17} />
     </button>
@@ -381,6 +384,18 @@
     font-weight: 600;
     color: var(--text-secondary);
     letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dev-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: #e8590c;
+    color: #fff;
   }
   .scroll {
     flex: 1;

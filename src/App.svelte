@@ -8,6 +8,7 @@
   import ConfirmDialog from "./lib/components/ConfirmDialog.svelte";
   import LockDialog from "./lib/components/LockDialog.svelte";
   import { prefs } from "./lib/stores/prefs.svelte";
+  import { identity } from "./lib/stores/identity.svelte";
   import Editor from "./lib/components/Editor.svelte";
   import NoteList from "./lib/components/NoteList.svelte";
   import NoteInfoDialog from "./lib/components/NoteInfoDialog.svelte";
@@ -18,6 +19,7 @@
   const CLOSE_BACKUP_LIMIT_MS = 90_000;
 
   onMount(() => {
+    identity.load();
     void app.init();
     const cleanups: (() => void)[] = [];
 

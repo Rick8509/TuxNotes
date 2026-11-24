@@ -130,6 +130,7 @@ impl Drop for BusyGuard<'_> {
 
 impl BackupService {
     pub fn new(
+        app_id: &str,
         data_dir: PathBuf,
         config_dir: PathBuf,
         db_path: PathBuf,
@@ -143,13 +144,17 @@ impl BackupService {
             .user_agent(concat!("TuxNotes/", env!("CARGO_PKG_VERSION")))
             .build()
             .expect("HTTP client");
-        let vault = TokenVault::new(data_dir.join("google-token"));
+        let vault = TokenVault::new(app_id, data_dir.join("google-token"));
         let signed_in = vault.load().is_some();
         Self {
             http,
             settings: SettingsStore::load(config_dir.join("settings.json")),
             vault,
-            key_vault: TokenVault::with_account(BACKUP_KEY_ACCOUNT, data_dir.join("backup-key")),
+            key_vault: TokenVault::with_account(
+                app_id,
+                BACKUP_KEY_ACCOUNT,
+                data_dir.join("backup-key"),
+            ),
             change_baseline: Mutex::new(0),
             auto_failures: Mutex::new(0),
             auto_retry_at: Mutex::new(0),

@@ -85,6 +85,7 @@ pub fn run() {
                 Err(e) => log::warn!("could not clean up attachments: {e}"),
             }
             let backup = BackupService::new(
+                &app.config().identifier,
                 data_dir,
                 config_dir,
                 db_path,
@@ -99,6 +100,10 @@ pub fn run() {
             });
             app.manage(export::ImportSession::default());
             spawn_auto_backup(app.handle().clone());
+            // "TuxNotes" or "TuxNotes Dev", for the task switcher.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_title(&app.package_info().name);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

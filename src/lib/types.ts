@@ -104,6 +104,10 @@ export interface RestoreResult {
 }
 
 export interface AppInfo {
+  /** "TuxNotes", or "TuxNotes Dev" for test builds. */
+  name: string;
+  /** A TuxNotes Dev build: its own app ID, notes and settings. */
+  dev: boolean;
   version: string;
   dataDir: string;
   database: string;

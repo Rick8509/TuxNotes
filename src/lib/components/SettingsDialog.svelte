@@ -7,6 +7,7 @@
   import { app, type SettingsSection } from "../stores/app.svelte";
   import { AUTO_LOCK_CHOICES, prefs, type AutoLock, type FirstLine, type SortBy, type TextSize, type Theme } from "../stores/prefs.svelte";
   import type { AppInfo } from "../types";
+  import { identity } from "../stores/identity.svelte";
   import BackupPanel, { type BackupView } from "./BackupPanel.svelte";
 
   const REPO_URL = "https://github.com/Rick8509/TuxNotes";
@@ -306,9 +307,11 @@
 
       {:else if section === "about"}
         <div class="about">
-          <img src="/icon.png" alt="" width="72" height="72" />
-          <h2>TuxNotes</h2>
-          <p class="tagline">Open notes for Linux</p>
+          <img src={identity.dev ? "/icon-dev.png" : "/icon.png"} alt="" width="72" height="72" />
+          <h2>{info?.name ?? identity.name}</h2>
+          <p class="tagline">
+            {info?.dev ? "Test build with its own notes. Your TuxNotes notes aren't touched." : "Open notes for Linux"}
+          </p>
           <p class="muted">Version {info?.version ?? "…"} · MIT License</p>
           <div class="about-actions">
             <button class="btn" onclick={openRepo}>GitHub</button>

@@ -357,6 +357,8 @@ const signedIn = () => backup.signedIn || fail("You're not signed in to Google D
 Object.assign(handlers, {
   backup_status: status,
   app_info: () => ({
+    name: "TuxNotes",
+    dev: false,
     version: "0.1.0 (browser preview)",
     dataDir: "~/.local/share/io.github.Rick8509.TuxNotes",
     database: "~/.local/share/io.github.Rick8509.TuxNotes/notes.db",

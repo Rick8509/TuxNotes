@@ -1,0 +1,20 @@
+{
+  "productName": "TuxNotes Dev",
+  "mainBinaryName": "tuxnotes-dev",
+  "identifier": "io.github.Rick8509.TuxNotes.Dev",
+  "bundle": {
+    "shortDescription": "Test builds of TuxNotes, with their own notes",
+    "longDescription": "TuxNotes Dev is a test build of TuxNotes from its development branch. It installs next to TuxNotes and keeps its own notes, settings and keyring entries, so trying new features never touches your real notes.",
+    "icon": [
+      "icons/dev/32x32.png",
+      "icons/dev/128x128.png",
+      "icons/dev/128x128@2x.png",
+      "icons/dev/icon.png"
+    ],
+    "linux": {
+      "deb": { "files": { "/usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml": null } },
+      "rpm": { "files": { "/usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml": null } },
+      "appimage": { "files": { "/usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml": null } }
+    }
+  }
+}

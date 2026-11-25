@@ -13,6 +13,8 @@
   import { contentExtensions } from "../editor/content";
   import { ChecklistSort, checklistActions } from "../editor/checklist";
   import { SearchHighlight, getSearch, goToMatch, scrollToPos, setSearch } from "../editor/search";
+  import { SlashCommands, slashPluginKey, type SlashCommand, type SlashMenuView } from "../editor/slashCommands";
+  import { exitSuggestion } from "@tiptap/suggestion";
   import { formatEditorDate } from "../format";
   import { exportMarkdown, exportPdf, importMarkdown, printNote } from "../importExport";
   import { displayUrl, isOpenableUrl } from "../links";
@@ -26,6 +28,7 @@
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
   import EditorToolbar from "./EditorToolbar.svelte";
   import LinkForm from "./LinkForm.svelte";
+  import SlashMenu from "./SlashMenu.svelte";
   import WindowControls from "./WindowControls.svelte";
 
   let element: HTMLDivElement;
@@ -73,6 +76,86 @@
       return { Tab: () => this.editor.commands.insertContent("\t") };
     },
   });
+
+  // --------------------------------------------------------- slash commands
+
+  /** The "/" menu while it's open: matching commands, highlighted one and position. */
+  let slash = $state<{ items: SlashCommand[]; index: number; query: string; x: number; y: number; above: boolean } | null>(null);
+  /** Runs the chosen command (replacing the typed "/query"); set by the suggestion plugin. */
+  let slashPick: ((item: SlashCommand) => void) | null = null;
+  const SLASH_MENU_WIDTH = 320;
+  /** Room the menu needs below the cursor before it opens upwards instead. */
+  const SLASH_MENU_ROOM = 380;
+
+  /** Under the "/" (or above it when there isn't room), in the scroller's coordinates. */
+  function placeSlashMenu(rect: DOMRect | null | undefined) {
+    const r = scroller.getBoundingClientRect();
+    const caret = rect ?? new DOMRect(r.left + 24, r.top + 24, 0, 18);
+    const below = r.bottom - caret.bottom;
+    const above = below < SLASH_MENU_ROOM && caret.top - r.top > below;
+    return {
+      x: Math.max(8, Math.min(caret.left - r.left - 10, scroller.clientWidth - SLASH_MENU_WIDTH - 8)),
+      y: (above ? caret.top - r.top - 6 : caret.bottom - r.top + 6) + scroller.scrollTop,
+      above,
+    };
+  }
+
+  const slashView: SlashMenuView = {
+    show: (props) => {
+      slashPick = props.command;
+      // Same query (e.g. an unrelated update): keep the highlighted item.
+      const keep = slash && slash.query === props.query ? Math.min(slash.index, props.items.length - 1) : 0;
+      slash = { items: props.items, index: Math.max(0, keep), query: props.query, ...placeSlashMenu(props.clientRect?.()) };
+    },
+    hide: () => {
+      slash = null;
+      slashPick = null;
+    },
+    keydown: ({ event }) => {
+      const s = slash;
+      if (!s) return false;
+      const count = s.items.length;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        if (count) s.index = (s.index + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
+        return true;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && !event.shiftKey && !event.ctrlKey && !event.altKey) {
+        // Nothing matches: let Enter and Tab do their usual thing (the menu closes).
+        if (!count) return false;
+        pickSlash(s.items[s.index]);
+        return true;
+      }
+      if (event.key === "Escape") slash = null; // the plugin closes it and keeps it closed
+      return false;
+    },
+  };
+
+  function pickSlash(item: SlashCommand) {
+    const pick = slashPick;
+    slash = null;
+    pick?.(item);
+  }
+
+  // Screen readers: the note (which keeps the focus) points at the highlighted command.
+  $effect(() => {
+    const dom = editor?.view.dom;
+    if (!dom) return;
+    const active = slash?.items[slash.index];
+    if (active) {
+      dom.setAttribute("aria-controls", "slash-menu-list");
+      dom.setAttribute("aria-activedescendant", `slash-item-${active.id}`);
+    } else {
+      dom.removeAttribute("aria-controls");
+      dom.removeAttribute("aria-activedescendant");
+    }
+  });
+
+  /** Close the menu without choosing (clicked elsewhere, switched notes). */
+  function closeSlash() {
+    if (!slash) return;
+    slash = null;
+    if (editor) exitSuggestion(editor.view, slashPluginKey);
+  }
 
   // ----------------------------------------------------- find & highlights
 
@@ -496,7 +579,12 @@
         // Settings → General → "Move checked items to the bottom".
         ChecklistSort.configure({ enabled: () => prefs.sortChecked }),
         SearchHighlight,
-        Placeholder.configure({ placeholder: "Start writing…" }),
+        Placeholder.configure({
+          // An empty note: "Start writing…". The empty line you're on: how to insert things.
+          placeholder: ({ editor: e, node }) =>
+            e.isEmpty ? "Start writing…" : node.type.name === "paragraph" ? "Type / for commands" : "",
+        }),
+        SlashCommands({ view: () => slashView, context: () => ({ attach: attachFromPicker, link: openLinkEditor }) }),
         Shortcuts,
         TabKey,
       ],
@@ -521,6 +609,8 @@
         handlePaste: (_view, event) => handlePaste(event),
         handleDrop: (view, event, _slice, moved) => handleDrop(view, event, moved),
       },
+      // Clicking outside the note (but not on the menu, which keeps the focus) closes the "/" menu.
+      onBlur: () => closeSlash(),
       onTransaction: ({ editor: e }) => {
         version++;
         updateLinkBubble(e);
@@ -558,6 +648,7 @@
     // The reload counter changes when the note was changed outside TuxNotes.
     const key = note ? `${note.id}${hiddenNow ? ":hidden" : ""}:${app.outsideReload}` : null;
     if (key !== loadedKey) {
+      slash = null; // the new note starts without the "/" menu
       // Same note reloaded (changed outside): keep the place and the cursor.
       const sameNote = !!note && !!loadedKey && loadedKey.split(":")[0] === note.id;
       const keepScroll = scroller.scrollTop;
@@ -705,6 +796,16 @@
     <div class="date">{note ? formatEditorDate(note.updatedAt) : ""}</div>
     <!-- TipTap owns everything inside this element. -->
     <div bind:this={element}></div>
+
+    {#if slash}
+      <SlashMenu
+        {...slash}
+        onpick={pickSlash}
+        onhover={(i) => {
+          if (slash) slash.index = i;
+        }}
+      />
+    {/if}
 
     {#if linkBubble && !linkForm}
       <!-- mousedown is prevented so the editor keeps its cursor while a button is clicked -->
@@ -936,12 +1037,19 @@
     color: var(--accent-strong);
     cursor: text;
   }
+  /* The "/query" being typed while the slash menu is open. */
+  .scroll :global(.prose .slash-query) {
+    background: var(--bg-input);
+    border-radius: 4px;
+    padding: 1px 2px;
+  }
   .scroll :global(.prose hr) {
     border: none;
     border-top: 1px solid var(--separator-strong);
     margin: 1em 0;
   }
-  .scroll :global(.prose p.is-editor-empty:first-child::before) {
+  .scroll :global(.prose p.is-editor-empty:first-child::before),
+  .scroll :global(.prose.ProseMirror-focused > p.is-empty:not(:first-child)::before) {
     content: attr(data-placeholder);
     float: left;
     height: 0;

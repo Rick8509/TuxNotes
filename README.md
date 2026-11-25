@@ -34,6 +34,7 @@ Run the command in the folder you downloaded to (usually `cd ~/Downloads` first)
 
 - Three panes: folders, note list and editor
 - Rich text: title, heading and subheading styles, bold, italic, underline, strikethrough, monospaced blocks, quotes
+- **Slash commands**: type `/` to insert headings, checklists, lists, tables, images and files, links, dividers or today's date from a menu at the cursor; keep typing to filter ("todo", "h2", "img")
 - Checklists with round checkboxes (ticked items move to the bottom; right-click for Check All, Uncheck All, Delete Checked Items), plus bulleted and numbered lists
 - **Tables**: insert from the toolbar, right-click a cell to add or remove rows and columns, Tab between cells, drag borders to resize columns
 - **Export and import**: save a note as Markdown (attachments are copied next to it) or as a PDF, print it, and import Markdown files as notes (checklists, tables and images included). All from the **⋯** button in the editor
@@ -53,6 +54,7 @@ Run the command in the folder you downloaded to (usually `cd ~/Downloads` first)
 
 | Action | Shortcut |
 |---|---|
+| Insert anything (slash commands) | `/` at the start of a line or after a space |
 | New note | `Ctrl+N` |
 | Settings | `Ctrl+,` |
 | Print the open note | `Ctrl+P` |

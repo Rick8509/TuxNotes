@@ -30,6 +30,18 @@
     list?.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
   });
 
+  /**
+   * Hover follows the mouse only when it really moved. WebKit sends mousemove events at
+   * the unmoved pointer when the list scrolls or changes under it; following those made
+   * the highlight jump back to the item under a resting pointer while using ↑/↓.
+   */
+  let lastPointer: { x: number; y: number } | null = null;
+  function onmousemove(e: MouseEvent, i: number) {
+    const moved = lastPointer !== null && (e.clientX !== lastPointer.x || e.clientY !== lastPointer.y);
+    lastPointer = { x: e.clientX, y: e.clientY };
+    if (moved && i !== index) onhover(i);
+  }
+
   /** The title with the typed text marked, when the title contains it. */
   function parts(title: string): [string, string, string] {
     const q = query.trim().toLowerCase();
@@ -65,7 +77,7 @@
           data-id={item.id}
           aria-selected={i === index}
           tabindex="-1"
-          onmousemove={() => i !== index && onhover(i)}
+          onmousemove={(e) => onmousemove(e, i)}
           onclick={() => onpick(item)}
           onkeydown={() => {}}
         >

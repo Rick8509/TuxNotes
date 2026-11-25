@@ -89,6 +89,31 @@ await page.keyboard.press("Tab"); await sleep(150);
 check("Tab inserts too (Subheading)", (await lastBlock()).tag === "h3", JSON.stringify(await lastBlock()));
 await page.keyboard.type("Section"); await page.keyboard.press("Enter"); await sleep(80);
 
+// Arrow keys with the mouse resting on the menu: the highlight must follow the keys,
+// not jump to the item under the (unmoved) pointer when the list scrolls.
+await newLine();
+await page.keyboard.type("/"); await sleep(150);
+const box = await page.$eval(".slash-menu .list", (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + 20 }; });
+await page.mouse.move(box.x, box.y); await sleep(80);
+const seen = [];
+// WebKitGTK (the engine TuxNotes runs on) sends "fake" mousemove events at the unmoved
+// pointer after scrolling or layout changes; headless Chrome doesn't, so send them here.
+const fakeMouseMove = () => page.evaluate(({ x, y }) => {
+  document.elementFromPoint(x, y)?.dispatchEvent(new MouseEvent("mousemove", { clientX: x, clientY: y, bubbles: true }));
+}, box);
+for (let i = 0; i < 9; i++) {
+  await page.keyboard.press("ArrowDown"); await sleep(60);
+  await fakeMouseMove(); await sleep(30);
+  seen.push(await activeItem());
+}
+const expected = ["Title", "Heading", "Subheading", "Monospaced", "Quote", "Checklist", "Bulleted List", "Numbered List", "Table"];
+check("with the mouse on the menu, ↓ still moves one item at a time", JSON.stringify(seen) === JSON.stringify(expected), JSON.stringify(seen));
+await page.mouse.move(box.x, box.y + 40); await sleep(80);
+check("…while moving the mouse still highlights the item under it", (await activeItem()) !== "Table", await activeItem());
+await page.keyboard.press("Escape"); await sleep(80);
+await page.mouse.move(5, 5);
+await page.keyboard.press("Backspace"); await sleep(60);
+
 // Escape closes and keeps the text; the menu stays closed while typing on
 await page.keyboard.type("/ta"); await sleep(120);
 await page.keyboard.press("Escape"); await sleep(120);

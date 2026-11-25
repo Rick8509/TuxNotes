@@ -13,6 +13,7 @@ class Identity {
       this.name = info.name;
       this.dev = info.dev;
       this.version = info.version;
+      document.title = info.name;
     } catch {
       /* keep the defaults */
     }

@@ -12,6 +12,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "test": "vitest run",
     "tauri": "tauri",
+    "app:dev": "node scripts/dev-app.mjs run",
+    "build:dev": "node scripts/dev-app.mjs build",
     "test:e2e": "vite build && node tests/e2e/run.mjs",
     "screenshots": "vite build && node scripts/screenshots.mjs"
   },

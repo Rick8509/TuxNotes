@@ -253,9 +253,9 @@ pub fn app_info(app: tauri::AppHandle) -> std::result::Result<AppInfo, String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let config_dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
     Ok(AppInfo {
-        name: app.package_info().name.clone(),
-        dev: app.config().identifier.ends_with(".Dev"),
-        version: app.package_info().version.to_string(),
+        name: crate::identity::display_name(&app.config().identifier).to_string(),
+        dev: crate::identity::is_dev(&app.config().identifier),
+        version: crate::identity::display_version(&app.package_info().version.to_string()),
         database: data_dir.join("notes.db").display().to_string(),
         data_dir: data_dir.display().to_string(),
         config_dir: config_dir.display().to_string(),

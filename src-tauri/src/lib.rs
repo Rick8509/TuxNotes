@@ -4,6 +4,7 @@ mod commands;
 mod credentials;
 mod export;
 mod google_client;
+mod identity;
 mod legacy_id;
 mod settings;
 
@@ -100,10 +101,6 @@ pub fn run() {
             });
             app.manage(export::ImportSession::default());
             spawn_auto_backup(app.handle().clone());
-            // "TuxNotes" or "TuxNotes Dev", for the task switcher.
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.set_title(&app.package_info().name);
-            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -118,8 +118,10 @@ For Fedora, Arch and other distributions, see the [Tauri prerequisites](https://
 
 ```bash
 npm install            # first time only, and after dependencies change
-npm run tauri dev
+npm run app:dev        # runs "TuxNotes Dev", with its own notes
 ```
+
+`npm run app:dev` runs **TuxNotes Dev**: the same app with its own app ID (`io.github.Rick8509.TuxNotes.Dev`), notes folder, settings and keyring entries, a DEV badge and an orange DEV icon. Your real notes in TuxNotes are never touched. (`npm run tauri dev` still runs it as TuxNotes, with your real notes.)
 
 Leave it running while you work:
 
@@ -130,18 +132,16 @@ The first build takes a few minutes; later builds are incremental.
 
 ### 3. Build installable packages
 
-```bash
-npx tauri build --bundles deb    # only the .deb (fastest)
-npx tauri build                  # .deb, .rpm and AppImage
-```
-
-Packages are written to `target/release/bundle/<format>/`. To install or update your local copy:
+To try your changes as an installed app, build **TuxNotes Dev**. It installs next to TuxNotes (package `tux-notes-dev`, command `tuxnotes-dev`) and keeps its own notes:
 
 ```bash
-sudo apt install ./target/release/bundle/deb/TuxNotes_*_amd64.deb
+npm run build:dev -- --bundles deb   # only the .deb (fastest); without it: .deb, .rpm and AppImage
+sudo apt install ./target/release/bundle/deb/TuxNotes\ Dev_*_amd64.deb
 ```
 
-Rebuilding or reinstalling never touches your notes, which live in `~/.local/share/io.github.Rick8509.TuxNotes/`.
+Its version is the current one plus `-dev.<number of commits>` (for example `0.1.0-dev.84`), so each new build installs over the previous one. You can also let GitHub build it: **Actions → Build and Publish → Run workflow** (from `dev`, *Dev build* ticked), then download the packages from the run.
+
+The real app is built the same way without the Dev settings (`npx tauri build`); releases do that automatically (see [Releasing](#releasing)). Rebuilding or reinstalling never touches your notes, which live in `~/.local/share/io.github.Rick8509.TuxNotes/` (TuxNotes Dev: `~/.local/share/io.github.Rick8509.TuxNotes.Dev/`).
 
 ### Working on the UI without Rust
 
@@ -172,7 +172,7 @@ The browser tests drive the app in Google Chrome or Chromium with the mock backe
 
 ## Releasing
 
-Releases are published from GitHub with one click: **Actions → Prepare Release → Run workflow**, then merge the pull request it opens. The packages are built, signed and published automatically. The full playbook, including test runs and what to do when something fails, is in [docs/RELEASING.md](docs/RELEASING.md).
+Releases are published from GitHub with one click: **Actions → Prepare Release → Run workflow**, then merge the pull request it opens. The packages are built, signed and published automatically. The full playbook, including dev builds and what to do when something fails, is in [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Roadmap
 

@@ -33,18 +33,22 @@ That's all. To update your own computer, install the new `.deb` from the release
 | **keep** | 0.1.0 → 0.1.0 | The very first release, or after closing a release pull request without merging it (see below) |
 | exact version | 1.0.0 | When you want a specific number (must be higher than the current one) |
 
-Versions are always `X.Y.Z`. Pre-release versions like `1.0.0-beta.1` aren't used, because Linux package managers would treat them as newer than `1.0.0`. For a test version, use a test run.
+Versions are always `X.Y.Z`. Pre-release versions like `1.0.0-beta.1` aren't used, because Linux package managers would treat them as newer than `1.0.0`. For a test version, use a dev build.
 
-## Test run: build the packages without publishing
+## Dev build: try a version before releasing it
 
-**Actions → Build and Publish → Run workflow**, keep **Test run** ticked. It builds the `.deb`, `.rpm` and AppImage from `dev` and attaches them to the run (scroll down to *Artifacts → packages*). Nothing is tagged or published. Use it to try a version on your own computer before releasing, or to check that the packages still build after big changes.
+**Actions → Build and Publish → Run workflow** (from `dev`), keep **Dev build** ticked. About 15 minutes later the run has **TuxNotes Dev** packages under *Artifacts* (`TuxNotes-Dev-0.1.0-dev.84`, kept 14 days). Nothing is tagged or published.
+
+TuxNotes Dev is a separate app: it installs **next to** TuxNotes (`sudo apt install ./TuxNotes*Dev_*.deb`), shows a DEV badge and an orange DEV icon, and keeps its own notes, settings and keyring entries. So you can try new features without risking your real notes. Each dev build has a higher version (`-dev.<commits>`) and installs over the previous one; remove it with `sudo apt remove tux-notes-dev`.
+
+On your computer, `npm run build:dev` builds the same packages and `npm run app:dev` runs TuxNotes Dev straight from the code (see the README).
 
 ## Before you release
 
 - [ ] The checks on `dev` are green (the badge in the README, or **Actions → Checks**).
 - [ ] `CHANGELOG.md` has a line under `## Unreleased` for each change users will notice.
 - [ ] If the look of the app changed: `npm run screenshots` and commit the new `docs/screenshots/` (they appear in the README and in software centres).
-- [ ] For bigger releases: a test run, and install the `.deb` from it on your computer.
+- [ ] For bigger releases: a dev build, installed and tried on your computer.
 
 ## When something goes wrong
 
@@ -59,7 +63,7 @@ Versions are always `X.Y.Z`. Pre-release versions like `1.0.0-beta.1` aren't use
 | You closed a release pull request and want to release later | The version was already raised on `dev`. Next time, run Prepare Release with **keep**: it re-uses that version and adds any newer notes to it. |
 | **Build and Publish** failed (red X in Actions) | Nothing was published. Open the run to see which step failed. If GitHub had a hiccup, click **Re-run failed jobs**. If the code needs a fix: fix it on `dev`, then run Prepare Release with **patch**. |
 | The release is published but has a bad bug | Fix it on `dev`, add a line to the changelog, run Prepare Release with **patch**. A published version is never changed or reused. |
-| Need to publish again from `main` (e.g. after a GitHub outage) | **Actions → Build and Publish → Run workflow → Use workflow from: main**, untick **Test run**. It publishes only if the version isn't released yet. |
+| Need to publish again from `main` (e.g. after a GitHub outage) | **Actions → Build and Publish → Run workflow → Use workflow from: main**, untick **Dev build**. It publishes only if the version isn't released yet. |
 
 ## Things to know
 

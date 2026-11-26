@@ -28,7 +28,15 @@ export function contentExtensions() {
     StarterKit.configure({
       document: false,
       heading: { levels: [1, 2, 3] },
-      link: { openOnClick: false, autolink: true, defaultProtocol: "https" },
+      link: {
+        openOnClick: false,
+        autolink: true,
+        defaultProtocol: "https",
+        // No red underlines in web addresses or code.
+        HTMLAttributes: { target: "_blank", rel: "noopener noreferrer nofollow", spellcheck: "false" },
+      },
+      code: { HTMLAttributes: { spellcheck: "false" } },
+      codeBlock: { HTMLAttributes: { spellcheck: "false" } },
     }),
     TaskList,
     TaskItem.configure({ nested: true }),

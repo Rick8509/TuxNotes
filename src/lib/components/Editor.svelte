@@ -136,6 +136,11 @@
     pick?.(item);
   }
 
+  // Settings → Spelling off: no underlines in the note (WebKit's checker is off too).
+  $effect(() => {
+    editor?.view.dom.setAttribute("spellcheck", String(prefs.spellCheck));
+  });
+
   // Screen readers: the note (which keeps the focus) points at the highlighted command.
   $effect(() => {
     const dom = editor?.view.dom;
@@ -592,7 +597,8 @@
       // Nothing can be typed until a note loads: the editor is hidden and loadNote sets this per note.
       editable: true,
       editorProps: {
-        attributes: { class: "prose", spellcheck: "true", "aria-label": "Note editor" },
+        // A function, so the spellcheck attribute follows Settings (see the effect below).
+        attributes: () => ({ class: "prose", spellcheck: String(prefs.spellCheck), "aria-label": "Note editor" }),
         handleDOMEvents: {
           click: (_view, event) => openLink(event),
           auxclick: (_view, event) => openLink(event),

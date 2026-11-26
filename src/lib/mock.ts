@@ -354,7 +354,18 @@ const status = (): BackupStatus => {
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const signedIn = () => backup.signedIn || fail("You're not signed in to Google Drive.");
 
+// Spelling: pretend these dictionaries are installed; tests read the calls.
+const MOCK_DICTIONARIES = ["de_DE", "en_GB", "en_US", "fr_FR"];
+const spellingCalls: { enabled: boolean; languages: string[] }[] = [];
+(globalThis as { __spellingCalls?: typeof spellingCalls }).__spellingCalls = spellingCalls;
+
 Object.assign(handlers, {
+  spelling_info: () => ({ available: MOCK_DICTIONARIES, systemDefault: ["en_US"] }),
+  set_spelling: ({ enabled, languages }: Args) => {
+    const langs = (languages as string[]).length ? (languages as string[]) : ["en_US"];
+    spellingCalls.push({ enabled: enabled as boolean, languages: languages as string[] });
+    return enabled ? langs.filter((l) => MOCK_DICTIONARIES.includes(l)) : [];
+  },
   backup_status: status,
   app_info: () => ({
     name: "TuxNotes",

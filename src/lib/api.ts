@@ -6,6 +6,7 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type {
   AppInfo,
+  SpellingInfo,
   AttachResult,
   Attachment,
   AutoBackup,
@@ -94,6 +95,10 @@ export const api = {
   restoreBackup: (id: string, password?: string) => call<RestoreResult>("restore_backup", { id, password: password ?? null }),
 
   appInfo: () => call<AppInfo>("app_info"),
+
+  spellingInfo: () => call<SpellingInfo>("spelling_info"),
+  /** Returns the languages actually in use (empty `languages`: the desktop's language). */
+  setSpelling: (enabled: boolean, languages: string[]) => call<string[]>("set_spelling", { enabled, languages }),
 
   /** Add a pasted or dropped file to a note. The bytes go over IPC as raw binary. */
   async addAttachment(noteId: string, file: File): Promise<Attachment> {

@@ -23,6 +23,10 @@ interface Persisted {
   /** Ticked checklist items move to the bottom of their list. */
   sortChecked: boolean;
   autoLockMinutes: AutoLock;
+  /** Underline misspelled words in notes. */
+  spellCheck: boolean;
+  /** Spelling dictionaries to use, e.g. ["en_US"]; empty = the desktop's language. */
+  spellLanguages: string[];
 }
 
 const DEFAULTS: Persisted = {
@@ -33,6 +37,8 @@ const DEFAULTS: Persisted = {
   firstLine: "title",
   sortChecked: true,
   autoLockMinutes: 10,
+  spellCheck: true,
+  spellLanguages: [],
 };
 
 const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
@@ -53,6 +59,11 @@ function load(): Persisted {
       autoLockMinutes: AUTO_LOCK_CHOICES.includes(p.autoLockMinutes as AutoLock)
         ? (p.autoLockMinutes as AutoLock)
         : DEFAULTS.autoLockMinutes,
+      spellCheck: typeof p.spellCheck === "boolean" ? p.spellCheck : DEFAULTS.spellCheck,
+      spellLanguages:
+        Array.isArray(p.spellLanguages) && p.spellLanguages.every((l) => typeof l === "string")
+          ? p.spellLanguages.slice(0, 20)
+          : [...DEFAULTS.spellLanguages],
     };
   } catch {
     return { ...DEFAULTS };
@@ -69,6 +80,8 @@ class Prefs {
   firstLine = $state<FirstLine>(DEFAULTS.firstLine);
   sortChecked = $state(DEFAULTS.sortChecked);
   autoLockMinutes = $state<AutoLock>(DEFAULTS.autoLockMinutes);
+  spellCheck = $state(DEFAULTS.spellCheck);
+  spellLanguages = $state<string[]>([...DEFAULTS.spellLanguages]);
   /** Follows the desktop's dark-mode setting live. */
   systemDark = $state(darkQuery?.matches ?? false);
 
@@ -102,6 +115,8 @@ class Prefs {
       firstLine: this.firstLine,
       sortChecked: this.sortChecked,
       autoLockMinutes: this.autoLockMinutes,
+      spellCheck: this.spellCheck,
+      spellLanguages: [...this.spellLanguages],
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(p));

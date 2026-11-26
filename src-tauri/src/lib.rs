@@ -7,6 +7,7 @@ mod google_client;
 mod identity;
 mod legacy_id;
 mod settings;
+mod spelling;
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -143,6 +144,8 @@ pub fn run() {
             commands::list_backups,
             commands::restore_backup,
             commands::app_info,
+            spelling::spelling_info,
+            spelling::set_spelling,
             attachments::add_attachment,
             attachments::attach_files,
             attachments::paste_from_clipboard,

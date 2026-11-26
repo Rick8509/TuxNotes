@@ -9,6 +9,7 @@
   import LockDialog from "./lib/components/LockDialog.svelte";
   import { prefs } from "./lib/stores/prefs.svelte";
   import { identity } from "./lib/stores/identity.svelte";
+  import { spelling } from "./lib/stores/spelling.svelte";
   import Editor from "./lib/components/Editor.svelte";
   import NoteList from "./lib/components/NoteList.svelte";
   import NoteInfoDialog from "./lib/components/NoteInfoDialog.svelte";
@@ -17,6 +18,13 @@
 
   /** How long closing waits for a backup before quitting anyway. */
   const CLOSE_BACKUP_LIMIT_MS = 90_000;
+
+  // Spell checking follows Settings → General → Spelling (at start and on every change).
+  $effect(() => {
+    void prefs.spellCheck;
+    void JSON.stringify(prefs.spellLanguages);
+    void spelling.apply();
+  });
 
   onMount(() => {
     identity.load();

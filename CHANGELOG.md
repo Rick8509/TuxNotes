@@ -6,6 +6,7 @@ All notable changes to TuxNotes are listed here.
 
 ### Added
 - **Slash commands.** Type `/` at the start of a line or after a space to insert anything from a menu at the cursor: Body, Title, Heading, Subheading, Monospaced, Quote, Checklist, Bulleted and Numbered List, Table, Image or File, Link, Divider, and today's date, the current time or both. Keep typing to filter: it ignores case and accents and understands other words and short forms ("todo", "chk", "h2", "hr", "img"), with the matching letters marked. Choose with ↑/↓ and Enter or Tab, or the mouse; Esc closes the menu and keeps what you typed. Each entry shows its shortcut or Markdown short form (`#`, `- [ ]`, `---`…). The menu opens upwards near the bottom of the window, doesn't appear in the middle of words, web addresses or code, and leaves out what can't be used there (no table inside a table). The empty line you're on shows "Type / for commands".
+- **Spell checking.** Misspelled words in notes are underlined in red; right-click one for suggestions, "Ignore Spelling" or "Learn Spelling". It uses the spelling dictionaries installed on the computer (Hunspell, e.g. `hunspell-en-us`) and starts with the desktop's language. **Settings → General → Spelling** turns it off or picks one or more languages, listed by name. Code blocks, inline code and links aren't checked. If no dictionary is installed, Settings says how to install one.
 
 ## 0.1.0 - 2026-11-23
 

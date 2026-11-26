@@ -8,6 +8,7 @@
   import { AUTO_LOCK_CHOICES, prefs, type AutoLock, type FirstLine, type SortBy, type TextSize, type Theme } from "../stores/prefs.svelte";
   import type { AppInfo } from "../types";
   import { identity } from "../stores/identity.svelte";
+  import { languageName, spelling } from "../stores/spelling.svelte";
   import BackupPanel, { type BackupView } from "./BackupPanel.svelte";
 
   const REPO_URL = "https://github.com/Rick8509/TuxNotes";
@@ -28,6 +29,7 @@
   onMount(() => {
     windowEl?.focus();
     api.appInfo().then((i) => (info = i)).catch(() => {});
+    void spelling.loadInfo();
   });
 
   /** Can't close or switch sections while a backup/restore is running. */
@@ -224,6 +226,57 @@
           </div>
         </div>
         <p class="footnote">Notes in Recently Deleted are removed permanently after 30 days.</p>
+
+        <h3 class="subhead">Spelling</h3>
+        <div class="group">
+          <label class="row">
+            <div class="label">
+              <span>Check spelling while typing</span>
+              <span class="hint">Misspelled words are underlined in red. Right-click one for suggestions.</span>
+            </div>
+            <input
+              type="checkbox"
+              class="switch"
+              checked={prefs.spellCheck}
+              onchange={(e) => prefs.set("spellCheck", e.currentTarget.checked)}
+            />
+          </label>
+          {#if prefs.spellCheck && spelling.info}
+            {#if spelling.info.available.length}
+              <div class="row stacked">
+                <div class="label">
+                  <span>Languages</span>
+                  <span class="hint">
+                    Words are accepted if any ticked language knows them. More languages: install their dictionary (e.g. <code>hunspell-de-de</code>) and reopen TuxNotes.
+                  </span>
+                </div>
+                <div class="languages" role="group" aria-label="Spelling languages">
+                  {#each spelling.info.available as code (code)}
+                    {@const on = spelling.chosen.includes(code)}
+                    <label class="language">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={on && spelling.chosen.length === 1}
+                        title={on && spelling.chosen.length === 1 ? "At least one language stays on. Turn spell checking off above instead." : undefined}
+                        onchange={(e) => spelling.toggle(code, e.currentTarget.checked)}
+                      />
+                      <span>{languageName(code)}</span>
+                      <span class="code">{code}</span>
+                    </label>
+                  {/each}
+                </div>
+              </div>
+            {:else}
+              <div class="row">
+                <span class="hint">
+                  No spelling dictionaries are installed. Install one for your language, for example
+                  <code>sudo apt install hunspell-en-us</code> (Fedora: <code>sudo dnf install hunspell-en</code>), then reopen TuxNotes.
+                </span>
+              </div>
+            {/if}
+          {/if}
+        </div>
 
         <h3 class="subhead">Locked Notes</h3>
         <div class="group">
@@ -449,6 +502,31 @@
   .hint {
     font-size: 12px;
     color: var(--text-secondary);
+  }
+  .languages {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 2px 12px;
+    margin-top: 8px;
+  }
+  .language {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    min-width: 0;
+  }
+  .language input {
+    accent-color: var(--accent);
+    width: 15px;
+    height: 15px;
+    flex: none;
+  }
+  .language .code {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
   }
   .subhead {
     margin: 22px 0 8px;

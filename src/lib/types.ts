@@ -103,6 +103,14 @@ export interface RestoreResult {
   safetyCopy: string;
 }
 
+/** Spelling dictionaries installed on this computer (see src-tauri/src/spelling.rs). */
+export interface SpellingInfo {
+  /** e.g. ["de_DE", "en_US"] */
+  available: string[];
+  /** The desktop's language, used when no language was chosen. */
+  systemDefault: string[];
+}
+
 export interface AppInfo {
   /** "TuxNotes", or "TuxNotes Dev" for test builds. */
   name: string;

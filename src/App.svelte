@@ -19,6 +19,11 @@
   /** How long closing waits for a backup before quitting anyway. */
   const CLOSE_BACKUP_LIMIT_MS = 90_000;
 
+  // "TuxNotes" or "TuxNotes Dev" (the Files window sets its own title).
+  $effect(() => {
+    document.title = identity.name;
+  });
+
   // Spell checking follows Settings → General → Spelling (at start and on every change).
   $effect(() => {
     void prefs.spellCheck;
@@ -146,6 +151,10 @@
     if (key === "p" && !e.shiftKey) {
       e.preventDefault();
       if (app.current) void printNote();
+    } else if (key === "o" && !e.shiftKey) {
+      // Open a text or code file in the Files window.
+      e.preventDefault();
+      void api.openFileDialog().catch((err) => app.showError(err));
     } else if (e.key === ",") {
       e.preventDefault();
       app.settingsSection = "general";

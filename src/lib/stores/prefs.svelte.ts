@@ -92,6 +92,14 @@ class Prefs {
       this.applyTheme();
     });
     this.applyTheme();
+    // Changed in another TuxNotes window (notes / Files): follow along.
+    if (typeof window !== "undefined") {
+      window.addEventListener("storage", (e) => {
+        if (e.key !== STORAGE_KEY) return;
+        Object.assign(this, load());
+        this.applyTheme();
+      });
+    }
   }
 
   get effectiveTheme(): "light" | "dark" {

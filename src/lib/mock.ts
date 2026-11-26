@@ -354,12 +354,62 @@ const status = (): BackupStatus => {
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const signedIn = () => backup.signedIn || fail("You're not signed in to Google Drive.");
 
+// Files window: files come from localStorage "tuxnotes-mock-files" ([{ path, text }]);
+// "Open File…" adds an example. Names ending in .bin behave like binary files, and paths
+// under /etc/ are read-only.
+const mockFiles = new Map<string, { path: string; name: string; text: string }>();
+let mockPendingFiles: string[] = [];
+let mockFilesSeeded = false;
+function mockQueueFile(path: string, text: string) {
+  let id = [...mockFiles].find(([, f]) => f.path === path)?.[0];
+  if (!id) {
+    id = `f${mockFiles.size + 1}`;
+    mockFiles.set(id, { path, name: path.split("/").pop() ?? path, text });
+  }
+  if (!mockPendingFiles.includes(id)) mockPendingFiles.push(id);
+}
+function seedMockFiles() {
+  if (mockFilesSeeded) return;
+  mockFilesSeeded = true;
+  try {
+    const seed = JSON.parse(localStorage.getItem("tuxnotes-mock-files") ?? "[]") as { path: string; text: string }[];
+    for (const f of seed) mockQueueFile(f.path, f.text);
+  } catch {
+    /* no seed */
+  }
+}
+
 // Spelling: pretend these dictionaries are installed; tests read the calls.
 const MOCK_DICTIONARIES = ["de_DE", "en_GB", "en_US", "fr_FR"];
 const spellingCalls: { enabled: boolean; languages: string[] }[] = [];
 (globalThis as { __spellingCalls?: typeof spellingCalls }).__spellingCalls = spellingCalls;
 
 Object.assign(handlers, {
+  take_pending_files: () => {
+    seedMockFiles();
+    const ids = mockPendingFiles;
+    mockPendingFiles = [];
+    return ids.map((id) => ({ id, path: mockFiles.get(id)!.path, name: mockFiles.get(id)!.name }));
+  },
+  read_text_file: ({ id }: Args) => {
+    const f = mockFiles.get(id as string) ?? fail("That file isn't open.");
+    if (f.name.endsWith(".bin")) fail(`“${f.name}” isn't a text file, so TuxNotes can't show it.`);
+    return {
+      id,
+      path: f.path,
+      name: f.name,
+      text: f.text,
+      encoding: "UTF-8",
+      lineEnding: f.text.includes("\r\n") ? "CRLF" : "LF",
+      readOnly: f.path.startsWith("/etc/"),
+      size: f.text.length,
+      modified: Date.now(),
+    };
+  },
+  open_file_dialog: () => {
+    mockQueueFile("/home/you/Documents/example.py", 'def greet(name):\n    print(f"Hello, {name}!")\n\ngreet("TuxNotes")\n');
+    return 1;
+  },
   spelling_info: () => ({ available: MOCK_DICTIONARIES, systemDefault: ["en_US"] }),
   set_spelling: ({ enabled, languages }: Args) => {
     const langs = (languages as string[]).length ? (languages as string[]) : ["en_US"];

@@ -5380,6 +5380,7 @@ name = "tuxnotes"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "encoding_rs",
  "env_logger",
  "gtk",
  "keyring",

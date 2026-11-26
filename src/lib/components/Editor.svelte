@@ -567,6 +567,9 @@
         { label: "Print…", action: printNote, disabled: !visible },
         { kind: "separator" },
         { label: "Import Markdown Files…", action: importMarkdown },
+        { kind: "separator" },
+        // Text and code files open in the Files window; they stay files (not notes).
+        { label: "Open File…   Ctrl+O", action: () => void api.openFileDialog().catch((e) => app.showError(e)) },
       ],
     };
   }

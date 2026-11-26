@@ -22,7 +22,8 @@
         "decorations": false,
         "transparent": true,
         "dragDropEnabled": false,
-        "zoomHotkeysEnabled": true
+        "zoomHotkeysEnabled": true,
+        "visible": false
       }
     ],
     "security": {
@@ -50,12 +51,14 @@
         "depends": [],
         "files": {
           "/usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml": "../packaging/io.github.Rick8509.TuxNotes.metainfo.xml"
-        }
+        },
+        "desktopTemplate": "../packaging/tuxnotes.desktop.hbs"
       },
       "rpm": {
         "files": {
           "/usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml": "../packaging/io.github.Rick8509.TuxNotes.metainfo.xml"
-        }
+        },
+        "desktopTemplate": "../packaging/tuxnotes.desktop.hbs"
       },
       "appimage": {
         "files": {

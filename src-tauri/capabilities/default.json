@@ -1,9 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissions for the main TuxNotes window",
+  "description": "Permissions for the TuxNotes windows (notes and files)",
   "windows": [
-    "main"
+    "main",
+    "files"
   ],
   "permissions": [
     "core:default",
@@ -14,6 +15,9 @@
     "core:window:allow-is-maximized",
     "core:window:allow-destroy",
     "core:window:allow-hide",
+    "core:window:allow-set-title",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
     "core:window:allow-set-fullscreen",
     "core:webview:allow-set-webview-zoom",
     "opener:default"

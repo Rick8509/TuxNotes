@@ -14,7 +14,8 @@
         "decorations": false,
         "transparent": true,
         "dragDropEnabled": false,
-        "zoomHotkeysEnabled": true
+        "zoomHotkeysEnabled": true,
+        "visible": false
       }
     ]
   },

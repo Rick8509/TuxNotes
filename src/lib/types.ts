@@ -103,6 +103,28 @@ export interface RestoreResult {
   safetyCopy: string;
 }
 
+// ------------------------------------------------------------- Files window
+// Mirrors src-tauri/src/files.rs.
+
+/** A file the user opened (from "Open With", the Open dialog, a drop or the command line). */
+export interface FileEntry {
+  id: string;
+  path: string;
+  name: string;
+}
+
+export interface TextFile extends FileEntry {
+  text: string;
+  /** "UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE" or "Windows-1252". */
+  encoding: string;
+  lineEnding: "LF" | "CRLF" | "CR";
+  /** No permission to save it. */
+  readOnly: boolean;
+  size: number;
+  /** Last modified, Unix ms. */
+  modified: number;
+}
+
 /** Spelling dictionaries installed on this computer (see src-tauri/src/spelling.rs). */
 export interface SpellingInfo {
   /** e.g. ["de_DE", "en_US"] */

@@ -6,6 +6,8 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type {
   AppInfo,
+  FileEntry,
+  TextFile,
   SpellingInfo,
   AttachResult,
   Attachment,
@@ -97,6 +99,12 @@ export const api = {
   appInfo: () => call<AppInfo>("app_info"),
 
   spellingInfo: () => call<SpellingInfo>("spelling_info"),
+
+  // Files window (text and code files, see src-tauri/src/files.rs)
+  takePendingFiles: () => call<FileEntry[]>("take_pending_files"),
+  readTextFile: (id: string) => call<TextFile>("read_text_file", { id }),
+  /** Pick files and open them in the Files window. Returns how many were chosen. */
+  openFileDialog: () => call<number>("open_file_dialog"),
   /** Returns the languages actually in use (empty `languages`: the desktop's language). */
   setSpelling: (enabled: boolean, languages: string[]) => call<string[]>("set_spelling", { enabled, languages }),
 

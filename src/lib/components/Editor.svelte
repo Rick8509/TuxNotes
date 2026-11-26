@@ -1145,17 +1145,125 @@
     border-radius: 4px;
     background: var(--bg-input);
   }
+  /* Code blocks: a bar (language, Copy) above the code, colours as in the Files window. */
+  .scroll :global(.prose .code-block) {
+    position: relative;
+    margin: 0.6em 0;
+    border-radius: var(--radius-md);
+    background: var(--bg-input);
+  }
+  .scroll :global(.prose .code-block-bar) {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 5px 8px 0;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    user-select: none;
+    opacity: 0.55;
+    transition: opacity 0.12s;
+  }
+  .scroll :global(.prose .code-block:hover .code-block-bar),
+  .scroll :global(.prose .code-block:focus-within .code-block-bar) {
+    opacity: 1;
+  }
+  .scroll :global(.prose .code-block-language),
+  .scroll :global(.prose .code-block-copy) {
+    height: 22px;
+    padding: 0 7px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    cursor: default;
+  }
+  .scroll :global(.prose .code-block-language:hover:not(:disabled)),
+  .scroll :global(.prose .code-block-copy:hover) {
+    background: var(--bg-active);
+    color: var(--text);
+  }
+  .scroll :global(.prose .code-block-language:disabled) {
+    opacity: 1;
+  }
   .scroll :global(.prose pre) {
+    margin: 0;
     font-family: var(--font-mono);
     font-size: 0.867em;
-    padding: 10px 12px;
+    padding: 4px 12px 10px;
     border-radius: var(--radius-md);
     background: var(--bg-input);
     overflow-x: auto;
   }
+  .scroll :global(.prose .code-block pre) {
+    background: none;
+  }
   .scroll :global(.prose pre code) {
     padding: 0;
     background: none;
+  }
+  .scroll :global(.prose .hljs-keyword),
+  .scroll :global(.prose .hljs-selector-tag),
+  .scroll :global(.prose .hljs-doctag) {
+    color: var(--syntax-keyword);
+  }
+  .scroll :global(.prose .hljs-string),
+  .scroll :global(.prose .hljs-regexp),
+  .scroll :global(.prose .hljs-addition),
+  .scroll :global(.prose .hljs-char) {
+    color: var(--syntax-string);
+  }
+  .scroll :global(.prose .hljs-number),
+  .scroll :global(.prose .hljs-literal),
+  .scroll :global(.prose .hljs-symbol) {
+    color: var(--syntax-number);
+  }
+  .scroll :global(.prose .hljs-comment),
+  .scroll :global(.prose .hljs-quote),
+  .scroll :global(.prose .hljs-meta) {
+    color: var(--syntax-comment);
+    font-style: italic;
+  }
+  .scroll :global(.prose .hljs-title.class_),
+  .scroll :global(.prose .hljs-type),
+  .scroll :global(.prose .hljs-built_in),
+  .scroll :global(.prose .hljs-selector-class) {
+    color: var(--syntax-type);
+  }
+  .scroll :global(.prose .hljs-title),
+  .scroll :global(.prose .hljs-title.function_),
+  .scroll :global(.prose .hljs-section) {
+    color: var(--syntax-function);
+  }
+  .scroll :global(.prose .hljs-attr),
+  .scroll :global(.prose .hljs-property),
+  .scroll :global(.prose .hljs-variable),
+  .scroll :global(.prose .hljs-template-variable),
+  .scroll :global(.prose .hljs-selector-id) {
+    color: var(--syntax-property);
+  }
+  .scroll :global(.prose .hljs-name),
+  .scroll :global(.prose .hljs-tag) {
+    color: var(--syntax-tag);
+  }
+  .scroll :global(.prose .hljs-attribute),
+  .scroll :global(.prose .hljs-selector-attr),
+  .scroll :global(.prose .hljs-selector-pseudo) {
+    color: var(--syntax-attribute);
+  }
+  .scroll :global(.prose .hljs-link),
+  .scroll :global(.prose .hljs-bullet) {
+    color: var(--syntax-link);
+  }
+  .scroll :global(.prose .hljs-deletion) {
+    color: var(--danger);
+  }
+  .scroll :global(.prose .hljs-emphasis) {
+    font-style: italic;
+  }
+  .scroll :global(.prose .hljs-strong) {
+    font-weight: 700;
   }
   .scroll :global(.prose a) {
     color: var(--accent-strong);

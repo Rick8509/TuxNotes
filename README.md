@@ -33,7 +33,7 @@ Run the command in the folder you downloaded to (usually `cd ~/Downloads` first)
 ## Features
 
 - Three panes: folders, note list and editor
-- Rich text: title, heading and subheading styles, bold, italic, underline, strikethrough, monospaced blocks, quotes
+- Rich text: title, heading and subheading styles, bold, italic, underline, strikethrough, quotes, and **code blocks in colour** (pick the language or let TuxNotes detect it; Copy button)
 - **Slash commands**: type `/` to insert headings, checklists, lists, tables, images and files, links, dividers or today's date from a menu at the cursor; keep typing to filter ("todo", "h2", "img")
 - **Spell checking** while typing, in one or more languages (Settings → General → Spelling); right-click a misspelled word for suggestions. Uses the installed Hunspell dictionaries (e.g. `sudo apt install hunspell-en-us`)
 - **Files window**: open text and code files (Open With → TuxNotes, `tuxnotes file.txt`, drag and drop, or Ctrl+O) in tabs, separate from your notes, with syntax colours for about 140 languages, line numbers, folding and word wrap. Edit and save them (Ctrl+S), keeping their encoding and line endings

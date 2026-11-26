@@ -6,6 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { TableKit } from "@tiptap/extension-table";
 import { FileNode, ImageNode } from "./attachmentNodes";
+import { CodeBlock } from "./codeBlock";
 
 /**
  * The note document. `firstLine` records how a note's first line looks, chosen by
@@ -36,8 +37,10 @@ export function contentExtensions() {
         HTMLAttributes: { target: "_blank", rel: "noopener noreferrer nofollow", spellcheck: "false" },
       },
       code: { HTMLAttributes: { spellcheck: "false" } },
-      codeBlock: { HTMLAttributes: { spellcheck: "false" } },
+      // Replaced by CodeBlock (syntax colours, language picker, Copy).
+      codeBlock: false,
     }),
+    CodeBlock,
     TaskList,
     TaskItem.configure({ nested: true }),
     // Tab / Shift+Tab move between cells; Tab in the last cell adds a row.

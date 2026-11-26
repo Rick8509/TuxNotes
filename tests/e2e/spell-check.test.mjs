@@ -49,7 +49,7 @@ await page.click('.note[data-id="a"]'); await sleep(250);
 // On by default with the desktop's language
 check("spell checking is switched on at start", JSON.stringify(await lastCall()) === JSON.stringify({ enabled: true, languages: [] }), JSON.stringify(await calls()));
 check("the note asks for spell checking", (await proseSpellcheck()) === "true");
-check("…but not in code blocks", await page.$eval(".prose pre", (e) => e.getAttribute("spellcheck")) === "false");
+check("…but not in code blocks", await page.$eval(".prose .code-block code", (e) => e.getAttribute("spellcheck")) === "false");
 check("…inline code", await page.$eval(".prose code:not(pre code)", (e) => e.getAttribute("spellcheck")) === "false");
 check("…or links", await page.$eval(".prose a", (e) => e.getAttribute("spellcheck")) === "false");
 

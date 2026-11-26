@@ -22,6 +22,9 @@ const lastBlock = () => page.evaluate(() => {
   if (el?.nodeType === 3) el = el.parentElement;
   while (el && el.parentElement !== prose) el = el.parentElement;
   if (!el) return null;
+  // Code blocks are a frame (language bar + pre); report them as "pre" with just the code.
+  const pre = el.querySelector(":scope > pre");
+  if (pre) return { tag: "pre", type: null, text: pre.textContent };
   return { tag: el.tagName.toLowerCase(), type: el.dataset.type ?? null, text: el.textContent };
 });
 const proseText = () => page.$eval(".prose", (e) => e.textContent);
@@ -106,7 +109,7 @@ for (let i = 0; i < 9; i++) {
   await fakeMouseMove(); await sleep(30);
   seen.push(await activeItem());
 }
-const expected = ["Title", "Heading", "Subheading", "Monospaced", "Quote", "Checklist", "Bulleted List", "Numbered List", "Table"];
+const expected = ["Title", "Heading", "Subheading", "Code Block", "Quote", "Checklist", "Bulleted List", "Numbered List", "Table"];
 check("with the mouse on the menu, ↓ still moves one item at a time", JSON.stringify(seen) === JSON.stringify(expected), JSON.stringify(seen));
 await page.mouse.move(box.x, box.y + 40); await sleep(80);
 check("…while moving the mouse still highlights the item under it", (await activeItem()) !== "Table", await activeItem());

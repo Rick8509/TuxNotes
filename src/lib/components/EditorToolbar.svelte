@@ -70,7 +70,7 @@
         { label: mark(editor.isActive("heading", { level: 2 }), "Heading"), action: () => chain().setHeading({ level: 2 }).run() },
         { label: mark(editor.isActive("heading", { level: 3 }), "Subheading"), action: () => chain().setHeading({ level: 3 }).run() },
         { label: mark(editor.isActive("paragraph"), "Body"), action: () => chain().setParagraph().run() },
-        { label: mark(editor.isActive("codeBlock"), "Monospaced"), action: () => chain().toggleCodeBlock().run() },
+        { label: mark(editor.isActive("codeBlock"), "Code Block"), action: () => chain().toggleCodeBlock().run() },
         { kind: "separator" },
         { label: mark(editor.isActive("bulletList"), "Bulleted List"), action: () => chain().toggleBulletList().run() },
         { label: mark(editor.isActive("orderedList"), "Numbered List"), action: () => chain().toggleOrderedList().run() },

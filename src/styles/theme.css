@@ -286,7 +286,8 @@ input {
     max-height: none !important;
   }
   .prose .note-image-handle,
-  .prose .note-image-badge {
+  .prose .note-image-badge,
+  .prose .code-block-bar {
     display: none !important;
   }
   .prose img.note-image,

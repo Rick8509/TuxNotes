@@ -895,7 +895,7 @@
 
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div
-    class="scroll first-{firstLine}"
+    class="scroll note-page first-{firstLine}"
     class:hidden={!note || hidden}
     style:--editor-font-size="{TEXT_SIZE_PX[prefs.textSize]}px"
     bind:this={scroller}
@@ -1075,39 +1075,12 @@
     background: var(--bg-active);
   }
 
-  /* ---------------------------------------------------- note typography */
-  .scroll :global(.prose) {
-    outline: none;
-    tab-size: 4;
-    /* Set from Settings → Appearance → Text size; everything below scales with it. */
-    font-size: var(--editor-font-size, 15px);
-    line-height: 1.55;
-    color: var(--text);
-    min-height: 60vh;
-    caret-color: var(--accent);
-  }
-  .scroll :global(.prose > :first-child) {
-    margin-top: 0;
-  }
-  .scroll :global(.prose p) {
-    margin: 0;
-  }
-  .scroll :global(.prose h1) {
-    font-size: 1.733em;
-    font-weight: 700;
-    line-height: 1.25;
-    margin: 0.6em 0 0.3em;
-  }
-  .scroll :global(.prose h2) {
-    font-size: 1.333em;
-    font-weight: 700;
-    margin: 0.8em 0 0.25em;
-  }
-  .scroll :global(.prose h3) {
-    font-size: 1.067em;
-    font-weight: 600;
-    margin: 0.8em 0 0.2em;
-  }
+  
+  
+  
+  
+  
+  
   /* "New notes start with" (Settings → General): like Apple Notes, the first line
      is shown as the note's title (or heading); "Body" leaves it as normal text. */
   .scroll.first-title :global(.prose > p:first-child),
@@ -1124,170 +1097,36 @@
     font-weight: 700;
     margin-bottom: 0.25em;
   }
-  .scroll :global(.prose ul),
-  .scroll :global(.prose ol) {
-    margin: 0.25em 0;
-    padding-left: 1.6em;
-  }
-  .scroll :global(.prose li > p) {
-    margin: 0;
-  }
-  .scroll :global(.prose blockquote) {
-    margin: 0.5em 0;
-    padding-left: 12px;
-    border-left: 3px solid var(--accent);
-    color: var(--text-secondary);
-  }
-  .scroll :global(.prose code) {
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-    padding: 1px 4px;
-    border-radius: 4px;
-    background: var(--bg-input);
-  }
-  /* Code blocks: a bar (language, Copy) above the code, colours as in the Files window. */
-  .scroll :global(.prose .code-block) {
-    position: relative;
-    margin: 0.6em 0;
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-  }
-  .scroll :global(.prose .code-block-bar) {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 6px;
-    padding: 5px 8px 0;
-    font-family: var(--font-ui);
-    font-size: 12px;
-    user-select: none;
-    opacity: 0.55;
-    transition: opacity 0.12s;
-  }
-  .scroll :global(.prose .code-block:hover .code-block-bar),
-  .scroll :global(.prose .code-block:focus-within .code-block-bar) {
-    opacity: 1;
-  }
-  .scroll :global(.prose .code-block-language),
-  .scroll :global(.prose .code-block-copy) {
-    height: 22px;
-    padding: 0 7px;
-    border: none;
-    border-radius: 5px;
-    background: transparent;
-    color: var(--text-secondary);
-    font: inherit;
-    cursor: default;
-  }
-  .scroll :global(.prose .code-block-language:hover:not(:disabled)),
-  .scroll :global(.prose .code-block-copy:hover) {
-    background: var(--bg-active);
-    color: var(--text);
-  }
-  .scroll :global(.prose .code-block-language:disabled) {
-    opacity: 1;
-  }
-  .scroll :global(.prose pre) {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: 0.867em;
-    padding: 4px 12px 10px;
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    overflow-x: auto;
-  }
-  .scroll :global(.prose .code-block pre) {
-    background: none;
-  }
-  .scroll :global(.prose pre code) {
-    padding: 0;
-    background: none;
-  }
-  .scroll :global(.prose .hljs-keyword),
-  .scroll :global(.prose .hljs-selector-tag),
-  .scroll :global(.prose .hljs-doctag) {
-    color: var(--syntax-keyword);
-  }
-  .scroll :global(.prose .hljs-string),
-  .scroll :global(.prose .hljs-regexp),
-  .scroll :global(.prose .hljs-addition),
-  .scroll :global(.prose .hljs-char) {
-    color: var(--syntax-string);
-  }
-  .scroll :global(.prose .hljs-number),
-  .scroll :global(.prose .hljs-literal),
-  .scroll :global(.prose .hljs-symbol) {
-    color: var(--syntax-number);
-  }
-  .scroll :global(.prose .hljs-comment),
-  .scroll :global(.prose .hljs-quote),
-  .scroll :global(.prose .hljs-meta) {
-    color: var(--syntax-comment);
-    font-style: italic;
-  }
-  .scroll :global(.prose .hljs-title.class_),
-  .scroll :global(.prose .hljs-type),
-  .scroll :global(.prose .hljs-built_in),
-  .scroll :global(.prose .hljs-selector-class) {
-    color: var(--syntax-type);
-  }
-  .scroll :global(.prose .hljs-title),
-  .scroll :global(.prose .hljs-title.function_),
-  .scroll :global(.prose .hljs-section) {
-    color: var(--syntax-function);
-  }
-  .scroll :global(.prose .hljs-attr),
-  .scroll :global(.prose .hljs-property),
-  .scroll :global(.prose .hljs-variable),
-  .scroll :global(.prose .hljs-template-variable),
-  .scroll :global(.prose .hljs-selector-id) {
-    color: var(--syntax-property);
-  }
-  .scroll :global(.prose .hljs-name),
-  .scroll :global(.prose .hljs-tag) {
-    color: var(--syntax-tag);
-  }
-  .scroll :global(.prose .hljs-attribute),
-  .scroll :global(.prose .hljs-selector-attr),
-  .scroll :global(.prose .hljs-selector-pseudo) {
-    color: var(--syntax-attribute);
-  }
-  .scroll :global(.prose .hljs-link),
-  .scroll :global(.prose .hljs-bullet) {
-    color: var(--syntax-link);
-  }
-  .scroll :global(.prose .hljs-deletion) {
-    color: var(--danger);
-  }
-  .scroll :global(.prose .hljs-emphasis) {
-    font-style: italic;
-  }
-  .scroll :global(.prose .hljs-strong) {
-    font-weight: 700;
-  }
-  .scroll :global(.prose a) {
-    color: var(--accent-strong);
-    cursor: text;
-  }
-  /* The "/query" being typed while the slash menu is open. */
-  .scroll :global(.prose .slash-query) {
-    background: var(--bg-input);
-    border-radius: 4px;
-    padding: 1px 2px;
-  }
-  .scroll :global(.prose hr) {
-    border: none;
-    border-top: 1px solid var(--separator-strong);
-    margin: 1em 0;
-  }
-  .scroll :global(.prose p.is-editor-empty:first-child::before),
-  .scroll :global(.prose.ProseMirror-focused > p.is-empty:not(:first-child)::before) {
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    color: var(--text-tertiary);
-  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   /* ------------------------------------------------------- find & search */
   .find-bar {
@@ -1329,14 +1168,8 @@
   .find-done:hover {
     background: var(--bg-hover);
   }
-  .scroll :global(.search-match) {
-    border-radius: 2px;
-    background: color-mix(in srgb, var(--accent) 38%, transparent);
-  }
-  .scroll :global(.search-match.current) {
-    background: var(--accent);
-    color: var(--accent-contrast);
-  }
+  
+  
 
   /* ----------------------------------------------------------------- links */
   .link-bubble {
@@ -1377,220 +1210,38 @@
     background: var(--separator-strong);
   }
 
-  /* ----------------------------------------------------------- attachments */
-  /* Images: natural size (at most the note's width and 75% of the window's height), or a
-     chosen width in percent (the frame's width; see ImageNode). */
-  .scroll :global(.prose .note-image-frame) {
-    position: relative;
-    width: fit-content;
-    max-width: 100%;
-    margin: 0.6em 0;
-    border-radius: var(--radius-md);
-  }
-  .scroll :global(.prose img.note-image) {
-    display: block;
-    max-width: 100%;
-    max-height: 75vh;
-    height: auto;
-    border-radius: var(--radius-md);
-    cursor: default;
-  }
-  .scroll :global(.prose .note-image-frame.sized img.note-image) {
-    width: 100%;
-    max-height: none;
-  }
-  .scroll :global(.prose .note-image-handle) {
-    position: absolute;
-    right: -7px;
-    bottom: -7px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: 2px solid var(--bg-editor);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-    cursor: nwse-resize;
-    opacity: 0;
-    transition: opacity 0.12s;
-    touch-action: none;
-  }
-  .scroll :global(.prose[contenteditable="true"] .note-image-frame:hover .note-image-handle),
-  .scroll :global(.prose[contenteditable="true"] .note-image-frame.ProseMirror-selectednode .note-image-handle),
-  .scroll :global(.prose .note-image-frame.resizing .note-image-handle) {
-    opacity: 1;
-  }
-  .scroll :global(.prose .note-image-badge) {
-    display: none;
-    position: absolute;
-    right: 12px;
-    bottom: 12px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.65);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 600;
-    pointer-events: none;
-  }
-  .scroll :global(.prose .note-image-frame.resizing .note-image-badge) {
-    display: block;
-  }
-  .scroll :global(.prose .note-file) {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    max-width: 440px;
-    margin: 0.5em 0;
-    padding: 8px 12px 8px 8px;
-    border: 1px solid var(--separator-strong);
-    border-radius: var(--radius-lg);
-    background: var(--bg-input);
-    cursor: default;
-    user-select: none;
-  }
-  .scroll :global(.prose .note-file:hover) {
-    background: var(--bg-active);
-  }
-  .scroll :global(.note-file-icon) {
-    flex: none;
-    display: grid;
-    place-items: end center;
-    width: 32px;
-    height: 40px;
-    padding-bottom: 5px;
-    border-radius: 4px 10px 4px 4px;
-    background: var(--accent);
-    color: var(--accent-contrast);
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-  }
-  .scroll :global(.note-file-text) {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .scroll :global(.note-file-name) {
-    font-weight: 600;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .scroll :global(.note-file-size) {
-    font-size: 0.8em;
-    color: var(--text-secondary);
-  }
-  .scroll :global(.prose .ProseMirror-selectednode.note-image-frame),
-  .scroll :global(.prose .ProseMirror-selectednode.note-file) {
-    outline: 3px solid var(--accent);
-    outline-offset: 2px;
-  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
-  /* ---------------------------------------------------------------- tables */
-  .scroll :global(.prose .tableWrapper) {
-    overflow-x: auto;
-    margin: 0.6em 0;
-  }
-  .scroll :global(.prose table) {
-    border-collapse: collapse;
-    table-layout: fixed;
-    width: 100%;
-    margin: 0.6em 0;
-    overflow: hidden;
-  }
-  .scroll :global(.prose .tableWrapper table) {
-    margin: 0;
-  }
-  .scroll :global(.prose td),
-  .scroll :global(.prose th) {
-    position: relative;
-    box-sizing: border-box;
-    min-width: 60px;
-    padding: 6px 10px;
-    border: 1px solid var(--separator-strong);
-    vertical-align: top;
-    text-align: left;
-  }
-  .scroll :global(.prose th) {
-    background: var(--bg-input);
-    font-weight: 600;
-  }
-  .scroll :global(.prose td > p),
-  .scroll :global(.prose th > p) {
-    margin: 0;
-  }
-  /* The first line of a note is styled as its title, but never inside a table. */
-  .scroll :global(.prose td p:first-child),
-  .scroll :global(.prose th p:first-child) {
-    font-size: inherit;
-  }
-  .scroll :global(.prose .selectedCell::after) {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    pointer-events: none;
-  }
-  .scroll :global(.prose .column-resize-handle) {
-    position: absolute;
-    top: 0;
-    right: -2px;
-    bottom: 0;
-    width: 4px;
-    z-index: 3;
-    background: var(--accent);
-    pointer-events: none;
-  }
-  .scroll :global(.prose.resize-cursor) {
-    cursor: col-resize;
-  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
-  /* Checklists: round yellow checkboxes like Apple Notes. */
-  .scroll :global(ul[data-type="taskList"]) {
-    list-style: none;
-    padding-left: 0.2em;
-  }
-  .scroll :global(ul[data-type="taskList"] > li) {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .scroll :global(ul[data-type="taskList"] > li > label) {
-    flex: none;
-    margin-top: 3px;
-    user-select: none;
-  }
-  .scroll :global(ul[data-type="taskList"] > li > div) {
-    flex: 1;
-    min-width: 0;
-  }
-  .scroll :global(ul[data-type="taskList"] > li input[type="checkbox"]) {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    border-radius: 50%;
-    border: 1.5px solid var(--text-tertiary);
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-  }
-  .scroll :global(ul[data-type="taskList"] > li input[type="checkbox"]:checked) {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-  .scroll :global(ul[data-type="taskList"] > li input[type="checkbox"]:checked::after) {
-    content: "";
-    width: 4px;
-    height: 8px;
-    margin-top: -2px;
-    border: solid #fff;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-  }
-  .scroll :global(ul[data-type="taskList"] > li[data-checked="true"] > div) {
-    color: var(--text-tertiary);
-  }
+  
+  
+  
+  
+  
+  
+  
+  
 </style>

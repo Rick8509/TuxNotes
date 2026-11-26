@@ -4,6 +4,8 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "./styles/theme.css";
+// Note content (also the Files window's formatted Markdown).
+import "./styles/prose.css";
 // Applies the saved theme to <html> before the first paint (no flash of the wrong theme).
 import "./lib/stores/prefs.svelte";
 import { getCurrentWindow } from "@tauri-apps/api/window";

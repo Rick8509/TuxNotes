@@ -4,8 +4,11 @@
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { listen } from "@tauri-apps/api/event";
-  import { ChevronDown, CircleAlert, FileCode, FileText, FolderOpen, Lock, WrapText, X } from "@lucide/svelte";
-  import { api, isTauri } from "../lib/api";
+  import { ChevronDown, CircleAlert, FileCode, FileText, FolderOpen, Lock, TriangleAlert, WrapText, X } from "@lucide/svelte";
+  import { api, errorText, isTauri } from "../lib/api";
+  import { CHANGED_ON_DISK, UNMAPPABLE } from "../lib/types";
+  import FilesDialog, { type DialogButton, type DialogRequest } from "./FilesDialog.svelte";
+  import type { FileTab } from "./files.svelte";
   import { identity } from "../lib/stores/identity.svelte";
   import { ui } from "../lib/stores/ui.svelte";
   import WindowControls from "../lib/components/WindowControls.svelte";
@@ -15,9 +18,158 @@
   import { filesPrefs } from "./filesPrefs.svelte";
 
   const active = $derived(files.active);
+
+  const isReady = (t: FileTab | null | undefined): t is FileTab => !!t && t.state === "ready" && !!t.file;
+  /** The tab the code view shows: the active one, or (while the active one is loading or
+   *  can't be shown) the one shown before, so the code view never goes away. */
+  let lastShown: string | null = null;
+  const viewTab = $derived.by(() => {
+    const pick = isReady(active) ? active : (files.tabs.find((t) => t.id === lastShown && isReady(t)) ?? files.tabs.find(isReady) ?? null);
+    lastShown = pick?.id ?? null;
+    return pick;
+  });
   let cursor = $state<CursorInfo | null>(null);
   let pickerOpen = $state(false);
   let codeView = $state<ReturnType<typeof CodeView>>();
+  let dialog = $state<DialogRequest | null>(null);
+  /** A message above the text (a failed save, …). */
+  let notice = $state<string | null>(null);
+
+  /** Ask a question; resolves with the chosen button's value ("cancel" for Escape). */
+  function ask(title: string, message: string, buttons: DialogButton[]): Promise<string> {
+    return new Promise((resolve) => {
+      dialog = {
+        title,
+        message,
+        buttons,
+        resolve: (value) => {
+          dialog = null;
+          resolve(value);
+        },
+      };
+    });
+  }
+  const CANCEL: DialogButton = { label: "Cancel", value: "cancel" };
+
+  // ------------------------------------------------------------------ saving
+
+  /** Save a tab. Returns false if it wasn't saved (cancelled or failed). */
+  async function save(tab: FileTab, opts: { force?: boolean; encoding?: string } = {}): Promise<boolean> {
+    const text = codeView?.getText(tab.id);
+    if (!tab.file || text == null) return false;
+    if (tab.file.readOnly) return saveAs(tab);
+    const encoding = opts.encoding ?? tab.file.encoding;
+    const expected = tab.conflict === "deleted" ? null : tab.file.modified;
+    try {
+      const saved = await api.saveTextFile(tab.id, text, encoding, tab.file.lineEnding, expected, opts.force ?? false);
+      files.synced(tab.id, saved);
+      codeView?.markSaved(tab.id, text);
+      notice = null;
+      return true;
+    } catch (e) {
+      const message = errorText(e);
+      if (message === CHANGED_ON_DISK) {
+        const choice = await ask(
+          `“${tab.name}” was changed by another program`,
+          "It changed on disk after you opened it. Saving replaces those changes with yours.",
+          [{ label: "Save Anyway", value: "save", kind: "destructive" }, CANCEL],
+        );
+        return choice === "save" && save(tab, { ...opts, force: true });
+      }
+      if (message === UNMAPPABLE) {
+        const choice = await ask(
+          `Save “${tab.name}” as UTF-8?`,
+          `It's stored as ${encoding}, which can't hold some of the characters you typed. UTF-8 can store any text and is what most programs expect today.`,
+          [{ label: "Save as UTF-8", value: "utf8", kind: "primary" }, CANCEL],
+        );
+        return choice === "utf8" && save(tab, { ...opts, encoding: "UTF-8" });
+      }
+      notice = message;
+      return false;
+    }
+  }
+
+  /** Save under a new name; the tab then shows that file. */
+  async function saveAs(tab: FileTab): Promise<boolean> {
+    const text = codeView?.getText(tab.id);
+    if (!tab.file || text == null) return false;
+    try {
+      const saved = await api.saveTextFileAs(tab.id, text, tab.file.encoding, tab.file.lineEnding);
+      if (!saved) return false;
+      codeView?.renameTab(tab.id, saved.id);
+      files.renamed(tab.id, saved);
+      codeView?.markSaved(saved.id, text);
+      codeView?.setReadOnly(saved.id, saved.readOnly);
+      notice = null;
+      return true;
+    } catch (e) {
+      const message = errorText(e);
+      if (message === UNMAPPABLE) {
+        notice = `Couldn't save: ${tab.file.encoding} can't hold some of the characters you typed. Use Save (Ctrl+S) to save as UTF-8.`;
+      } else notice = message;
+      return false;
+    }
+  }
+
+  /** Close a tab, asking first if it has unsaved changes. */
+  async function closeTab(id: string) {
+    const tab = files.tabs.find((t) => t.id === id);
+    if (!tab) return;
+    if (tab.dirty) {
+      files.activeId = id;
+      const choice = await ask(`Save changes to “${tab.name}”?`, "Your changes are lost if you don't save them.", [
+        { label: "Don't Save", value: "discard" },
+        CANCEL,
+        { label: "Save", value: "save", kind: "primary" },
+      ]);
+      if (choice === "cancel" || (choice === "save" && !(await save(tab)))) return;
+    }
+    files.close(id);
+  }
+
+  // --------------------------------------------------- changes made elsewhere
+
+  /** Another program changed or deleted an open file: reload it, or ask if it was edited. */
+  async function checkDisk() {
+    for (const tab of [...files.tabs]) {
+      if (tab.state !== "ready" || !tab.file) continue;
+      let status;
+      try {
+        status = await api.fileStatus(tab.id);
+      } catch {
+        continue;
+      }
+      const current = files.tabs.find((t) => t.id === tab.id);
+      if (!current?.file) continue;
+      if (!status.exists) {
+        if (current.conflict !== "deleted") files.setConflict(tab.id, "deleted");
+      } else if (status.modified !== current.file.modified || status.size !== current.file.size) {
+        if (current.dirty) {
+          if (!current.conflict) files.setConflict(tab.id, "changed");
+        } else await reload(current);
+      } else if (current.conflict === "deleted") {
+        files.setConflict(tab.id, undefined);
+      }
+    }
+  }
+
+  async function reload(tab: FileTab) {
+    try {
+      const file = await api.readTextFile(tab.id);
+      codeView?.replaceText(tab.id, file.text);
+      files.synced(tab.id, file);
+    } catch (e) {
+      notice = errorText(e);
+    }
+  }
+
+  async function keepMine(tab: FileTab) {
+    try {
+      files.keepMine(tab.id, await api.fileStatus(tab.id));
+    } catch (e) {
+      notice = errorText(e);
+    }
+  }
 
   function pickLanguage(language: string) {
     pickerOpen = false;
@@ -52,9 +204,12 @@
     if (key === "o" && !e.shiftKey) {
       e.preventDefault();
       void openDialog();
+    } else if (key === "s") {
+      e.preventDefault();
+      if (active) void (e.shiftKey ? saveAs(active) : save(active));
     } else if (key === "w" && !e.shiftKey) {
       e.preventDefault();
-      if (files.activeId) files.close(files.activeId);
+      if (files.activeId) void closeTab(files.activeId);
     } else if (e.key === "Tab" || e.key === "PageDown" || e.key === "PageUp") {
       e.preventDefault();
       files.step(e.key === "PageUp" || (e.key === "Tab" && e.shiftKey) ? -1 : 1);
@@ -63,7 +218,7 @@
 
   // Window title: the open file's name.
   $effect(() => {
-    const title = active ? `${active.name} — ${identity.name}` : identity.name;
+    const title = active ? `${active.dirty ? "● " : ""}${active.name} — ${identity.name}` : identity.name;
     document.title = title;
     if (isTauri) void getCurrentWindow().setTitle(title);
   });
@@ -72,8 +227,37 @@
     identity.load();
     void files.pull();
     const cleanups: (() => void)[] = [];
+    // Notice files changed by other programs (on focus, and every few seconds when visible).
+    const check = () => {
+      if (document.visibilityState === "visible" && !dialog) void checkDisk();
+    };
+    const timer = setInterval(check, 3000);
+    window.addEventListener("focus", check);
+    cleanups.push(() => {
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+    });
     if (isTauri) {
       listen("files-pending", () => void files.pull()).then((fn) => cleanups.push(fn));
+      // Closing the window with unsaved changes: ask first.
+      getCurrentWindow()
+        .onCloseRequested(async (event) => {
+          const unsaved = files.dirtyTabs;
+          if (!unsaved.length) return;
+          event.preventDefault();
+          const what = unsaved.length === 1 ? `“${unsaved[0].name}”` : `${unsaved.length} files`;
+          const choice = await ask(`Save changes to ${what} before closing?`, "Your changes are lost if you don't save them.", [
+            { label: "Don't Save", value: "discard" },
+            CANCEL,
+            { label: unsaved.length === 1 ? "Save" : "Save All", value: "save", kind: "primary" },
+          ]);
+          if (choice === "cancel") return;
+          if (choice === "save") {
+            for (const tab of unsaved) if (!(await save(tab))) return;
+          }
+          await getCurrentWindow().destroy();
+        })
+        .then((fn) => cleanups.push(fn));
       // Square corners when maximized or full screen (like the notes window).
       const win = getCurrentWindow();
       const sync = async () => {
@@ -101,20 +285,22 @@
           aria-selected={tab.id === files.activeId}
           title={tab.path}
           onclick={() => (files.activeId = tab.id)}
-          onauxclick={(e) => e.button === 1 && files.close(tab.id)}
+          onauxclick={(e) => e.button === 1 && closeTab(tab.id)}
           onkeydown={(e) => (e.key === "Enter" || e.key === " ") && (files.activeId = tab.id)}
         >
           {#if isPlainText(tab.name)}<FileText size={14} />{:else}<FileCode size={14} />{/if}
           <span class="name">{tab.name}</span>
           <button
             class="close"
-            title="Close (Ctrl+W)"
-            aria-label="Close {tab.name}"
+            class:dirty={tab.dirty}
+            title={tab.dirty ? "Unsaved changes. Close (Ctrl+W)" : "Close (Ctrl+W)"}
+            aria-label="Close {tab.name}{tab.dirty ? ' (unsaved changes)' : ''}"
             onclick={(e) => {
               e.stopPropagation();
-              files.close(tab.id);
+              void closeTab(tab.id);
             }}
           >
+            <span class="dot" aria-hidden="true"></span>
             <X size={13} />
           </button>
         </div>
@@ -128,6 +314,44 @@
   </header>
 
   <main class="body">
+    <!-- The code view stays alive (hidden) while a tab that's loading or can't be shown is
+         active: it holds every tab's text, including unsaved changes. -->
+    {#if viewTab?.file}
+      <div class="code-area" class:hidden={viewTab.id !== active?.id}>
+        {#if notice}
+          <div class="banner error" role="alert">
+            <CircleAlert size={15} />
+            <span>{notice}</span>
+            <button class="close-banner" aria-label="Dismiss" onclick={() => (notice = null)}><X size={14} /></button>
+          </div>
+        {/if}
+        {#if viewTab.conflict === "changed"}
+          <div class="banner" role="alert">
+            <TriangleAlert size={15} />
+            <span>Another program changed “{viewTab.name}” while you were editing it.</span>
+            <button class="banner-btn" onclick={() => viewTab && reload(viewTab)}>Reload (lose my changes)</button>
+            <button class="banner-btn" onclick={() => viewTab && keepMine(viewTab)}>Keep Mine</button>
+          </div>
+        {:else if viewTab.conflict === "deleted"}
+          <div class="banner" role="alert">
+            <TriangleAlert size={15} />
+            <span>“{viewTab.name}” was deleted or moved. Save (Ctrl+S) to create it again.</span>
+          </div>
+        {/if}
+        <CodeView
+          bind:this={codeView}
+          id={viewTab.id}
+          name={viewTab.name}
+          text={viewTab.file.text}
+          readOnly={viewTab.file.readOnly}
+          ondirty={(tabId, dirty) => files.setDirty(tabId, dirty)}
+          openIds={files.tabs.map((t) => t.id)}
+          wrap={filesPrefs.wrap}
+          oncursor={(info) => (cursor = info)}
+          onlanguage={(tabId, language, indentation) => files.setInfo(tabId, { language, indentation })}
+        />
+      </div>
+    {/if}
     {#if !active}
       <div class="empty">
         <FileCode size={44} strokeWidth={1.4} />
@@ -148,17 +372,6 @@
       </div>
     {:else if active.state === "loading" || !active.file}
       <div class="empty"><p class="hint">Opening “{active.name}”…</p></div>
-    {:else}
-      <CodeView
-        bind:this={codeView}
-        id={active.id}
-        name={active.name}
-        text={active.file.text}
-        openIds={files.tabs.map((t) => t.id)}
-        wrap={filesPrefs.wrap}
-        oncursor={(info) => (cursor = info)}
-        onlanguage={(tabId, language, indentation) => files.setInfo(tabId, { language, indentation })}
-      />
     {/if}
   </main>
 
@@ -167,7 +380,9 @@
       <!-- Long paths are cut at the start; <bdi> keeps the slashes where they belong. -->
       <span class="path" title={active.file.path}><bdi dir="ltr">{active.file.path}</bdi></span>
       {#if active.file.readOnly}
-        <span class="badge" title="You don't have permission to change this file."><Lock size={11} /> Read-only</span>
+        <span class="badge" title="You don't have permission to change this file. Save As (Ctrl+Shift+S) keeps a copy you can edit.">
+          <Lock size={11} /> Read-only
+        </span>
       {/if}
       {#if cursor}
         <span class="cursor">Ln {cursor.line}, Col {cursor.column}{cursor.selected ? ` (${cursor.selected} selected)` : ""}</span>
@@ -193,6 +408,10 @@
     {#if pickerOpen}
       <LanguagePicker current={active.language ?? "Plain Text"} onpick={pickLanguage} onclose={() => (pickerOpen = false)} />
     {/if}
+  {/if}
+
+  {#if dialog}
+    <FilesDialog request={dialog} />
   {/if}
 </div>
 
@@ -295,6 +514,23 @@
     background: var(--bg-active);
     color: var(--text);
   }
+  /* Unsaved changes: a dot instead of the ×, which comes back on hover. */
+  .close .dot {
+    display: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-secondary);
+  }
+  .close.dirty {
+    opacity: 1;
+  }
+  .close.dirty:not(:hover) .dot {
+    display: block;
+  }
+  .close.dirty:not(:hover) :global(svg) {
+    display: none;
+  }
   .spacer {
     flex: 1;
     align-self: stretch;
@@ -303,6 +539,57 @@
   .body {
     flex: 1;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .code-area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .code-area > :global(.code) {
+    flex: 1;
+  }
+  .code-area.hidden {
+    display: none;
+  }
+  .banner {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+    background: color-mix(in srgb, var(--accent) 16%, var(--bg-editor));
+    border-bottom: 1px solid var(--separator);
+  }
+  .banner.error {
+    background: color-mix(in srgb, var(--danger) 12%, var(--bg-editor));
+  }
+  .banner span {
+    flex: 1;
+  }
+  .banner-btn {
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .banner-btn:hover {
+    background: var(--bg-active);
+  }
+  .close-banner {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 5px;
+    color: var(--text-secondary);
+  }
+  .close-banner:hover {
+    background: var(--bg-hover);
   }
   .empty {
     height: 100%;

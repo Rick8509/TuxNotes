@@ -7,6 +7,7 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type {
   AppInfo,
   FileEntry,
+  FileStatus,
   TextFile,
   SpellingInfo,
   AttachResult,
@@ -105,6 +106,13 @@ export const api = {
   readTextFile: (id: string) => call<TextFile>("read_text_file", { id }),
   /** Pick files and open them in the Files window. Returns how many were chosen. */
   openFileDialog: () => call<number>("open_file_dialog"),
+  fileStatus: (id: string) => call<FileStatus>("file_status", { id }),
+  /** Fails with CHANGED_ON_DISK (unless `force`) or UNMAPPABLE; see types.ts. */
+  saveTextFile: (id: string, text: string, encoding: string, lineEnding: string, expectedModified: number | null, force = false) =>
+    call<TextFile>("save_text_file", { id, text, encoding, lineEnding, expectedModified, force }),
+  /** Save under a name chosen in the dialog; null when cancelled. */
+  saveTextFileAs: (id: string, text: string, encoding: string, lineEnding: string) =>
+    call<TextFile | null>("save_text_file_as", { id, text, encoding, lineEnding }),
   /** Returns the languages actually in use (empty `languages`: the desktop's language). */
   setSpelling: (enabled: boolean, languages: string[]) => call<string[]>("set_spelling", { enabled, languages }),
 

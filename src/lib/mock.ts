@@ -355,29 +355,61 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const signedIn = () => backup.signedIn || fail("You're not signed in to Google Drive.");
 
 // Files window: files come from localStorage "tuxnotes-mock-files" ([{ path, text }]);
-// "Open File…" adds an example. Names ending in .bin behave like binary files, and paths
-// under /etc/ are read-only.
-const mockFiles = new Map<string, { path: string; name: string; text: string }>();
+// "Open File…" adds an example. Names ending in .bin behave like binary files, paths
+// under /etc/ are read-only, and Save As saves to /home/you/Documents/. Tests can
+// change or delete a file "outside TuxNotes" with __mockFileChange(path, text | null).
+type MockFile = { path: string; name: string; text: string; modified: number; exists: boolean; encoding: string };
+const mockFiles = new Map<string, MockFile>();
 let mockPendingFiles: string[] = [];
 let mockFilesSeeded = false;
-function mockQueueFile(path: string, text: string) {
+let mockClock = Date.now();
+const mockTick = () => (mockClock += 1000);
+function mockRegisterFile(path: string, text: string, encoding = "UTF-8"): string {
   let id = [...mockFiles].find(([, f]) => f.path === path)?.[0];
   if (!id) {
     id = `f${mockFiles.size + 1}`;
-    mockFiles.set(id, { path, name: path.split("/").pop() ?? path, text });
+    mockFiles.set(id, { path, name: path.split("/").pop() ?? path, text, modified: mockTick(), exists: true, encoding });
   }
+  return id;
+}
+function mockQueueFile(path: string, text: string, encoding?: string) {
+  const id = mockRegisterFile(path, text, encoding);
   if (!mockPendingFiles.includes(id)) mockPendingFiles.push(id);
 }
 function seedMockFiles() {
   if (mockFilesSeeded) return;
   mockFilesSeeded = true;
   try {
-    const seed = JSON.parse(localStorage.getItem("tuxnotes-mock-files") ?? "[]") as { path: string; text: string }[];
-    for (const f of seed) mockQueueFile(f.path, f.text);
+    const seed = JSON.parse(localStorage.getItem("tuxnotes-mock-files") ?? "[]") as { path: string; text: string; encoding?: string }[];
+    for (const f of seed) mockQueueFile(f.path, f.text, f.encoding);
   } catch {
     /* no seed */
   }
 }
+function mockTextFile(id: string) {
+  const f = mockFiles.get(id) ?? fail("That file isn't open.");
+  if (!f.exists) fail(`Couldn't open “${f.name}”: it no longer exists`);
+  if (f.name.endsWith(".bin")) fail(`“${f.name}” isn't a text file, so TuxNotes can't show it.`);
+  return {
+    id,
+    path: f.path,
+    name: f.name,
+    text: f.text,
+    encoding: f.encoding,
+    lineEnding: f.text.includes("\r\n") ? "CRLF" : "LF",
+    readOnly: f.path.startsWith("/etc/"),
+    size: f.text.length,
+    modified: f.modified,
+  };
+}
+(globalThis as { __mockFileChange?: unknown }).__mockFileChange = (path: string, text: string | null) => {
+  const f = [...mockFiles.values()].find((x) => x.path === path);
+  if (!f) return;
+  if (text === null) f.exists = false;
+  else Object.assign(f, { text, exists: true, modified: mockTick() });
+};
+(globalThis as { __mockFileText?: unknown }).__mockFileText = (path: string) =>
+  [...mockFiles.values()].find((x) => x.path === path)?.text ?? null;
 
 // Spelling: pretend these dictionaries are installed; tests read the calls.
 const MOCK_DICTIONARIES = ["de_DE", "en_GB", "en_US", "fr_FR"];
@@ -391,20 +423,26 @@ Object.assign(handlers, {
     mockPendingFiles = [];
     return ids.map((id) => ({ id, path: mockFiles.get(id)!.path, name: mockFiles.get(id)!.name }));
   },
-  read_text_file: ({ id }: Args) => {
+  read_text_file: ({ id }: Args) => mockTextFile(id as string),
+  file_status: ({ id }: Args) => {
     const f = mockFiles.get(id as string) ?? fail("That file isn't open.");
-    if (f.name.endsWith(".bin")) fail(`“${f.name}” isn't a text file, so TuxNotes can't show it.`);
-    return {
-      id,
-      path: f.path,
-      name: f.name,
-      text: f.text,
-      encoding: "UTF-8",
-      lineEnding: f.text.includes("\r\n") ? "CRLF" : "LF",
-      readOnly: f.path.startsWith("/etc/"),
-      size: f.text.length,
-      modified: Date.now(),
-    };
+    return { exists: f.exists, modified: f.exists ? f.modified : 0, size: f.exists ? f.text.length : 0 };
+  },
+  save_text_file: ({ id, text, encoding, lineEnding, expectedModified, force }: Args) => {
+    const f = mockFiles.get(id as string) ?? fail("That file isn't open.");
+    if (f.path.startsWith("/etc/")) fail(`Couldn't save “${f.name}”: you don't have permission to change it`);
+    if (!force && f.exists && expectedModified != null && f.modified !== expectedModified) fail("CHANGED_ON_DISK");
+    if (encoding === "Windows-1252" && /[^\u0000-\u00ff]/.test(text as string)) fail("UNMAPPABLE");
+    // Like the app: the editor's "\n" line breaks are saved as the file's own.
+    const saved = lineEnding === "CRLF" ? (text as string).replace(/\r?\n/g, "\r\n") : text;
+    Object.assign(f, { text: saved, encoding, exists: true, modified: mockTick() });
+    return mockTextFile(id as string);
+  },
+  save_text_file_as: ({ id, text, encoding }: Args) => {
+    const f = mockFiles.get(id as string) ?? fail("That file isn't open.");
+    const newId = mockRegisterFile(`/home/you/Documents/copy of ${f.name}`, "");
+    Object.assign(mockFiles.get(newId)!, { text, encoding, exists: true, modified: mockTick() });
+    return mockTextFile(newId);
   },
   open_file_dialog: () => {
     mockQueueFile("/home/you/Documents/example.py", 'def greet(name):\n    print(f"Hello, {name}!")\n\ngreet("TuxNotes")\n');

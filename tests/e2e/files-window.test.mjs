@@ -46,7 +46,7 @@ check("a code file shows its text", JSON.stringify(await lines()) === JSON.strin
 check("…with line numbers", (await page.$$eval(".cm-lineNumbers .cm-gutterElement", (els) => els.map((e) => e.textContent).filter(Boolean))).includes("4"));
 check("…and the path, encoding and line endings below", /\/home\/you\/code\/hello\.py.*UTF-8.*LF/.test(await status()), await status());
 check("…and isn't read-only", !(await status()).includes("Read-only"));
-check("…the text can't be changed yet (viewer)", await page.$eval(".cm-content", (e) => e.getAttribute("aria-readonly") === "true" || e.contentEditable === "false"));
+check("…and can be edited (it isn't read-only)", await page.$eval(".cm-content", (e) => e.getAttribute("aria-readonly") !== "true" && e.contentEditable === "true"));
 
 // The cursor position is kept per tab
 await page.click(".cm-content .cm-line:nth-child(4)"); await sleep(100);

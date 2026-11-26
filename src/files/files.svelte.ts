@@ -1,7 +1,7 @@
 // The Files window's tabs: text and code files opened from "Open With", the Open dialog,
 // drops or the command line (see src-tauri/src/files.rs).
 import { api, errorText } from "../lib/api";
-import type { FileEntry, TextFile } from "../lib/types";
+import type { FileEntry, FileStatus, TextFile } from "../lib/types";
 import type { Indentation } from "./languages";
 
 export interface FileTab extends FileEntry {
@@ -11,6 +11,10 @@ export interface FileTab extends FileEntry {
   /** Language for syntax colours ("Plain Text" for none), detected or picked. */
   language?: string;
   indentation?: Indentation;
+  /** Edited since it was opened or saved. */
+  dirty?: boolean;
+  /** Another program changed or deleted the file while it had unsaved changes. */
+  conflict?: "changed" | "deleted";
 }
 
 class Files {
@@ -48,6 +52,41 @@ class Files {
     } catch (e) {
       this.update(id, { state: "error", error: errorText(e) });
     }
+  }
+
+  get dirtyTabs(): FileTab[] {
+    return this.tabs.filter((t) => t.dirty);
+  }
+
+  setDirty(id: string, dirty: boolean) {
+    this.update(id, { dirty });
+  }
+
+  setConflict(id: string, conflict: FileTab["conflict"]) {
+    this.update(id, { conflict });
+  }
+
+  /** Saved, or reloaded from disk: this is now what's on disk. */
+  synced(id: string, file: TextFile) {
+    const tab = this.tabs.find((t) => t.id === id);
+    this.update(id, { file: { ...file, text: tab?.file?.text ?? file.text }, conflict: undefined });
+  }
+
+  /** "Keep Mine": the change on disk is noted, so saving later replaces it without asking. */
+  keepMine(id: string, status: FileStatus) {
+    const tab = this.tabs.find((t) => t.id === id);
+    if (tab?.file) this.update(id, { file: { ...tab.file, modified: status.modified, size: status.size }, conflict: undefined });
+  }
+
+  /** Save As: the tab now shows another file (with its own id). */
+  renamed(oldId: string, file: TextFile) {
+    // That file may already be open in another tab: this one replaces it.
+    if (file.id !== oldId) this.close(file.id);
+    const i = this.tabs.findIndex((t) => t.id === oldId);
+    if (i < 0) return;
+    const text = this.tabs[i].file?.text ?? file.text;
+    this.tabs[i] = { ...this.tabs[i], id: file.id, name: file.name, path: file.path, file: { ...file, text }, conflict: undefined };
+    if (this.activeId === oldId) this.activeId = file.id;
   }
 
   /** Language and indentation, once the code view knows them (or the user picks one). */

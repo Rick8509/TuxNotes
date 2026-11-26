@@ -125,6 +125,17 @@ export interface TextFile extends FileEntry {
   modified: number;
 }
 
+/** Where an open file stands on disk (to notice changes by other programs). */
+export interface FileStatus {
+  exists: boolean;
+  modified: number;
+  size: number;
+}
+
+/** Errors from saving that the Files window handles itself (see src-tauri/src/files.rs). */
+export const CHANGED_ON_DISK = "CHANGED_ON_DISK";
+export const UNMAPPABLE = "UNMAPPABLE";
+
 /** Spelling dictionaries installed on this computer (see src-tauri/src/spelling.rs). */
 export interface SpellingInfo {
   /** e.g. ["de_DE", "en_US"] */

@@ -11,9 +11,11 @@
 
 <script lang="ts">
   // The text of the open file (CodeMirror). Each tab keeps its own state: cursor,
-  // selection, undo history, folds and scroll position survive switching tabs.
+  // selection, undo history, folds and scroll position survive switching tabs. The
+  // Files window saves through getText / markSaved and reloads through replaceText.
   import { untrack } from "svelte";
-  import { Compartment, EditorState, type Extension } from "@codemirror/state";
+  import { Compartment, EditorState, Text, type Extension, type TransactionSpec } from "@codemirror/state";
+  import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
   import {
     EditorView,
     drawSelection,
@@ -23,13 +25,14 @@
     keymap,
     lineNumbers,
   } from "@codemirror/view";
-  import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+  import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
   import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
   import {
     bracketMatching,
     codeFolding,
     foldGutter,
     foldKeymap,
+    indentOnInput,
     indentUnit,
     syntaxHighlighting,
     type LanguageDescription,
@@ -42,14 +45,18 @@
     id: string;
     name: string;
     text: string;
+    /** No permission to save it: viewing only. */
+    readOnly: boolean;
     /** Every open tab, so closed ones can be forgotten. */
     openIds: string[];
     wrap: boolean;
     oncursor: (info: CursorInfo) => void;
     /** The tab's language ("Plain Text" when none) and indentation, once known. */
     onlanguage: (tabId: string, language: string, indentation: Indentation) => void;
+    /** The tab's text differs from what's on disk (or stopped differing). */
+    ondirty: (tabId: string, dirty: boolean) => void;
   }
-  let { id, name, text, openIds, wrap, oncursor, onlanguage }: Props = $props();
+  let { id, name, text, readOnly, openIds, wrap, oncursor, onlanguage, ondirty }: Props = $props();
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
@@ -58,6 +65,21 @@
   // Shared by every tab's state, so they can be changed later.
   const languageConf = new Compartment();
   const wrapConf = new Compartment();
+  const readOnlyConf = new Compartment();
+  /** The text as last loaded or saved, per tab: anything else is unsaved. */
+  const savedText = new Map<string, Text>();
+  const dirty = new Set<string>();
+
+  function setDirty(tabId: string, doc: Text) {
+    const base = savedText.get(tabId);
+    const now = !!base && !doc.eq(base);
+    if (now === dirty.has(tabId)) return;
+    if (now) dirty.add(tabId);
+    else dirty.delete(tabId);
+    ondirty(tabId, now);
+  }
+
+  const editable = (ro: boolean): Extension => [EditorState.readOnly.of(ro), EditorView.editable.of(true)];
 
   function report(state: EditorState) {
     const sel = state.selection.main;
@@ -65,7 +87,7 @@
     oncursor({ line: line.number, column: sel.head - line.from + 1, selected: Math.abs(sel.to - sel.from), lines: state.doc.lines });
   }
 
-  function extensions(indentation: Indentation): Extension[] {
+  function extensions(indentation: Indentation, ro: boolean): Extension[] {
     return [
       lineNumbers(),
       foldGutter({ openText: "⌄", closedText: "›" }),
@@ -73,20 +95,25 @@
       highlightSpecialChars(),
       history(),
       codeFolding(),
+      closeBrackets(),
+      indentOnInput(),
       drawSelection(),
       highlightActiveLine(),
       highlightSelectionMatches(),
       bracketMatching(),
       search({ top: true }),
       syntaxHighlighting(codeHighlight),
-      keymap.of([...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap]),
+      keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, indentWithTab]),
       indentUnit.of(indentation.tabs ? "\t" : " ".repeat(indentation.size)),
       EditorState.tabSize.of(indentation.size),
-      EditorState.readOnly.of(true),
+      readOnlyConf.of(editable(ro)),
       languageConf.of([]),
       wrapConf.of(wrap ? EditorView.lineWrapping : []),
+      // Only the shown tab's state gets view updates. Use its current id (Save As
+      // changes a tab's id), not the one it was created with.
       EditorView.updateListener.of((u) => {
         if (u.selectionSet || u.docChanged) report(u.state);
+        if (u.docChanged && shownId) setDirty(shownId, u.state.doc);
       }),
       codeTheme,
       codeExtras,
@@ -116,7 +143,8 @@
       requestAnimationFrame(() => view && (view.scrollDOM.scrollTop = before.scroll));
     } else {
       const indentation = detectIndentation(doc);
-      view.setState(EditorState.create({ doc, extensions: extensions(indentation) }));
+      view.setState(EditorState.create({ doc, extensions: extensions(indentation, readOnly) }));
+      savedText.set(tabId, view.state.doc);
       view.scrollDOM.scrollTop = 0;
       const desc = detectLanguage(fileName, doc);
       onlanguage(tabId, desc?.name ?? PLAIN_TEXT, indentation);
@@ -126,6 +154,62 @@
     shownId = tabId;
     report(view.state);
     view.focus();
+  }
+
+  /** A tab's state, shown or not. */
+  function stateOf(tabId: string): EditorState | null {
+    return tabId === shownId && view ? view.state : (saved.get(tabId)?.state ?? null);
+  }
+
+  /** Change a tab's state, shown or not. */
+  function updateTab(tabId: string, spec: TransactionSpec) {
+    if (tabId === shownId && view) view.dispatch(spec);
+    else {
+      const s = saved.get(tabId);
+      if (s) saved.set(tabId, { ...s, state: s.state.update(spec).state });
+    }
+  }
+
+  /** The text to save. */
+  export function getText(tabId: string): string | null {
+    return stateOf(tabId)?.doc.toString() ?? null;
+  }
+
+  /** `text` was saved: changes made since (while saving) stay unsaved. */
+  export function markSaved(tabId: string, text: string) {
+    const state = stateOf(tabId);
+    if (!state) return;
+    savedText.set(tabId, Text.of(text.split("\n")));
+    setDirty(tabId, state.doc);
+  }
+
+  /** The file changed on disk: show the new text, keeping the cursor near where it was. */
+  export function replaceText(tabId: string, text: string) {
+    const state = stateOf(tabId);
+    if (!state) return;
+    const line = state.doc.lineAt(state.selection.main.head).number;
+    const doc = Text.of(text.split(/\r\n?|\n/));
+    const at = doc.line(Math.min(line, doc.lines)).from;
+    updateTab(tabId, { changes: { from: 0, to: state.doc.length, insert: doc }, selection: { anchor: at } });
+    savedText.set(tabId, doc);
+    setDirty(tabId, doc);
+  }
+
+  /** Save As gave the tab a new file (and id). */
+  export function renameTab(oldId: string, newId: string) {
+    if (shownId === oldId) shownId = newId;
+    for (const map of [saved, savedText] as Map<string, unknown>[]) {
+      if (map.has(oldId)) {
+        map.set(newId, map.get(oldId));
+        map.delete(oldId);
+      }
+    }
+    if (dirty.delete(oldId)) dirty.add(newId);
+  }
+
+  /** Allow or stop editing (e.g. after Save As to a folder you can write to). */
+  export function setReadOnly(tabId: string, ro: boolean) {
+    updateTab(tabId, { effects: readOnlyConf.reconfigure(editable(ro)) });
   }
 
   /** The language picker: colour the shown file as `language`. */
@@ -149,7 +233,13 @@
   // Forget tabs that were closed.
   $effect(() => {
     const open = new Set(openIds);
-    for (const tabId of [...saved.keys()]) if (!open.has(tabId)) saved.delete(tabId);
+    for (const tabId of [...saved.keys(), ...savedText.keys()]) {
+      if (!open.has(tabId)) {
+        saved.delete(tabId);
+        savedText.delete(tabId);
+        dirty.delete(tabId);
+      }
+    }
   });
 
   $effect(() => () => {

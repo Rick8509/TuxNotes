@@ -55,8 +55,10 @@
     onlanguage: (tabId: string, language: string, indentation: Indentation) => void;
     /** The tab's text differs from what's on disk (or stopped differing). */
     ondirty: (tabId: string, dirty: boolean) => void;
+    /** Another view (formatted Markdown) is shown instead: don't take the focus. */
+    behind?: boolean;
   }
-  let { id, name, text, readOnly, openIds, wrap, oncursor, onlanguage, ondirty }: Props = $props();
+  let { id, name, text, readOnly, openIds, wrap, oncursor, onlanguage, ondirty, behind = false }: Props = $props();
 
   let host: HTMLDivElement;
   let view: EditorView | null = null;
@@ -153,7 +155,7 @@
     }
     shownId = tabId;
     report(view.state);
-    view.focus();
+    if (!behind) view.focus();
   }
 
   /** A tab's state, shown or not. */
@@ -193,6 +195,28 @@
     updateTab(tabId, { changes: { from: 0, to: state.doc.length, insert: doc }, selection: { anchor: at } });
     savedText.set(tabId, doc);
     setDirty(tabId, doc);
+  }
+
+  /** The formatted Markdown view changed the text: replace what differs (unsaved). */
+  export function editText(tabId: string, text: string) {
+    const state = stateOf(tabId);
+    if (!state) return;
+    const old = state.doc.toString();
+    if (old === text) return;
+    let from = 0;
+    while (from < old.length && from < text.length && old[from] === text[from]) from++;
+    let endOld = old.length;
+    let endNew = text.length;
+    while (endOld > from && endNew > from && old[endOld - 1] === text[endNew - 1]) {
+      endOld--;
+      endNew--;
+    }
+    updateTab(tabId, { changes: { from, to: endOld, insert: text.slice(from, endNew) } });
+    // Not shown: the update listener doesn't see it.
+    if (tabId !== shownId) {
+      const s = stateOf(tabId);
+      if (s) setDirty(tabId, s.doc);
+    }
   }
 
   /** Save As gave the tab a new file (and id). */

@@ -14,6 +14,7 @@
   import WindowControls from "../lib/components/WindowControls.svelte";
   import CodeView, { type CursorInfo } from "./CodeView.svelte";
   import LanguagePicker from "./LanguagePicker.svelte";
+  import MarkdownPage from "./MarkdownPage.svelte";
   import { files } from "./files.svelte";
   import { filesPrefs } from "./filesPrefs.svelte";
 
@@ -32,6 +33,18 @@
   let pickerOpen = $state(false);
   let codeView = $state<ReturnType<typeof CodeView>>();
   let dialog = $state<DialogRequest | null>(null);
+  let markdownPage = $state<ReturnType<typeof MarkdownPage>>();
+  /** Bumped when a tab's text is reloaded from disk, so its formatted page starts over. */
+  let reloads = $state<Record<string, number>>({});
+
+  const isMarkdown = (tab: FileTab | null | undefined) => tab?.language === "Markdown";
+  /** The active tab is a Markdown file shown as a formatted page. */
+  const formatted = $derived(!!viewTab && viewTab.id === active?.id && isMarkdown(viewTab) && filesPrefs.markdownView === "formatted");
+
+  function toggleMarkdownView() {
+    markdownPage?.flush();
+    filesPrefs.setMarkdownView(filesPrefs.markdownView === "formatted" ? "text" : "formatted");
+  }
   /** A message above the text (a failed save, …). */
   let notice = $state<string | null>(null);
 
@@ -55,6 +68,7 @@
 
   /** Save a tab. Returns false if it wasn't saved (cancelled or failed). */
   async function save(tab: FileTab, opts: { force?: boolean; encoding?: string } = {}): Promise<boolean> {
+    markdownPage?.flush();
     const text = codeView?.getText(tab.id);
     if (!tab.file || text == null) return false;
     if (tab.file.readOnly) return saveAs(tab);
@@ -91,6 +105,7 @@
 
   /** Save under a new name; the tab then shows that file. */
   async function saveAs(tab: FileTab): Promise<boolean> {
+    markdownPage?.flush();
     const text = codeView?.getText(tab.id);
     if (!tab.file || text == null) return false;
     try {
@@ -113,6 +128,7 @@
 
   /** Close a tab, asking first if it has unsaved changes. */
   async function closeTab(id: string) {
+    markdownPage?.flush();
     const tab = files.tabs.find((t) => t.id === id);
     if (!tab) return;
     if (tab.dirty) {
@@ -131,6 +147,8 @@
 
   /** Another program changed or deleted an open file: reload it, or ask if it was edited. */
   async function checkDisk() {
+    // Edits still waiting in the formatted view count as edits.
+    markdownPage?.flush();
     for (const tab of [...files.tabs]) {
       if (tab.state !== "ready" || !tab.file) continue;
       let status;
@@ -158,6 +176,7 @@
       const file = await api.readTextFile(tab.id);
       codeView?.replaceText(tab.id, file.text);
       files.synced(tab.id, file);
+      reloads[tab.id] = (reloads[tab.id] ?? 0) + 1;
     } catch (e) {
       notice = errorText(e);
     }
@@ -201,7 +220,13 @@
     const mod = e.ctrlKey || e.metaKey;
     if (!mod || e.altKey) return;
     const key = e.key.toLowerCase();
-    if (key === "o" && !e.shiftKey) {
+    if (key === "m" && e.shiftKey) {
+      // Ctrl+Shift+M: a Markdown file as a formatted page, or as Markdown text.
+      if (isMarkdown(active)) {
+        e.preventDefault();
+        toggleMarkdownView();
+      }
+    } else if (key === "o" && !e.shiftKey) {
       e.preventDefault();
       void openDialog();
     } else if (key === "s") {
@@ -338,7 +363,18 @@
             <span>“{viewTab.name}” was deleted or moved. Save (Ctrl+S) to create it again.</span>
           </div>
         {/if}
+        {#if formatted && viewTab.file}
+          {#key `${viewTab.id}:${reloads[viewTab.id] ?? 0}`}
+            <MarkdownPage
+              bind:this={markdownPage}
+              text={codeView?.getText(viewTab.id) ?? viewTab.file.text}
+              readOnly={viewTab.file.readOnly}
+              onchange={(markdown) => viewTab && codeView?.editText(viewTab.id, markdown)}
+            />
+          {/key}
+        {/if}
         <CodeView
+          behind={formatted}
           bind:this={codeView}
           id={viewTab.id}
           name={viewTab.name}
@@ -384,24 +420,36 @@
           <Lock size={11} /> Read-only
         </span>
       {/if}
-      {#if cursor}
-        <span class="cursor">Ln {cursor.line}, Col {cursor.column}{cursor.selected ? ` (${cursor.selected} selected)` : ""}</span>
+      {#if isMarkdown(active)}
+        <div class="view-switch" role="radiogroup" aria-label="Show as" title="Formatted page or Markdown text (Ctrl+Shift+M)">
+          <button role="radio" aria-checked={filesPrefs.markdownView === "formatted"} class:on={filesPrefs.markdownView === "formatted"} onclick={() => filesPrefs.markdownView !== "formatted" && toggleMarkdownView()}>
+            Formatted
+          </button>
+          <button role="radio" aria-checked={filesPrefs.markdownView === "text"} class:on={filesPrefs.markdownView === "text"} onclick={() => filesPrefs.markdownView !== "text" && toggleMarkdownView()}>
+            Markdown
+          </button>
+        </div>
       {/if}
-      {#if active.indentation}
-        <span title="How this file is indented">{active.indentation.tabs ? "Tabs" : `Spaces: ${active.indentation.size}`}</span>
+      {#if !formatted}
+        {#if cursor}
+          <span class="cursor">Ln {cursor.line}, Col {cursor.column}{cursor.selected ? ` (${cursor.selected} selected)` : ""}</span>
+        {/if}
+        {#if active.indentation}
+          <span title="How this file is indented">{active.indentation.tabs ? "Tabs" : `Spaces: ${active.indentation.size}`}</span>
+        {/if}
+        <button class="status-btn" title="Choose the language for colours" onclick={() => (pickerOpen = !pickerOpen)}>
+          {active.language ?? "Plain Text"} <ChevronDown size={11} />
+        </button>
+        <button
+          class="status-btn"
+          class:on={filesPrefs.wrap}
+          title="Word wrap (Alt+Z)"
+          aria-pressed={filesPrefs.wrap}
+          onclick={() => filesPrefs.setWrap(!filesPrefs.wrap)}
+        >
+          <WrapText size={13} /> Wrap
+        </button>
       {/if}
-      <button class="status-btn" title="Choose the language for colours" onclick={() => (pickerOpen = !pickerOpen)}>
-        {active.language ?? "Plain Text"} <ChevronDown size={11} />
-      </button>
-      <button
-        class="status-btn"
-        class:on={filesPrefs.wrap}
-        title="Word wrap (Alt+Z)"
-        aria-pressed={filesPrefs.wrap}
-        onclick={() => filesPrefs.setWrap(!filesPrefs.wrap)}
-      >
-        <WrapText size={13} /> Wrap
-      </button>
       <span>{active.file.encoding}</span>
       <span>{active.file.lineEnding}</span>
     </footer>
@@ -550,6 +598,28 @@
   }
   .code-area > :global(.code) {
     flex: 1;
+  }
+  /* The formatted page is shown instead of the text (which stays, hidden). */
+  .code-area:has(> :global(.md-scroll)) > :global(.code) {
+    display: none;
+  }
+  .view-switch {
+    display: flex;
+    padding: 1px;
+    border-radius: 6px;
+    background: var(--bg-input);
+  }
+  .view-switch button {
+    padding: 0 8px;
+    height: 18px;
+    border-radius: 5px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .view-switch button.on {
+    background: var(--bg-list);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   }
   .code-area.hidden {
     display: none;

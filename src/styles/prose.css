@@ -488,3 +488,35 @@
 .note-page ul[data-type="taskList"] > li[data-checked="true"] > div {
   color: var(--text-tertiary);
 }
+
+/* Markdown files (Files window): headings 4–6 and images, which notes don't have. */
+.note-page .prose h4 {
+  font-size: 1.067em;
+  font-weight: 700;
+  margin: 0.8em 0 0.2em;
+}
+
+.note-page .prose h5,
+.note-page .prose h6 {
+  font-size: 1em;
+  font-weight: 700;
+  margin: 0.8em 0 0.2em;
+}
+
+.note-page .prose h6 {
+  color: var(--text-secondary);
+}
+
+.note-page .prose .md-image {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 0.87em;
+  cursor: default;
+}
+
+.note-page .prose .md-image.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}

@@ -93,7 +93,7 @@ export const CodeBlock = CodeBlockLowlight.configure({
 }).extend({
   // In the editor: the code with a small bar above it (language, Copy).
   addNodeView() {
-    return ({ node, editor, getPos }) => {
+    return ({ node, editor, getPos, view }) => {
       let current = node;
       const dom = el("div", "code-block");
       const bar = el("div", "code-block-bar");
@@ -132,16 +132,17 @@ export const CodeBlock = CodeBlockLowlight.configure({
         other.hidden = known;
         if (!known) Object.assign(other, { value: lang, textContent: languageName(lang) });
         select.value = lang;
-        select.disabled = !editor.isEditable;
+        select.disabled = !view.editable;
         code.className = lang ? `language-${lang}` : "";
         clearTimeout(detectTimer);
         detectTimer = setTimeout(showDetected, 300);
       };
       sync(node);
 
-      // The note becomes editable (or read-only) after its code blocks are drawn.
-      const editableWatch = new MutationObserver(() => (select.disabled = !editor.isEditable));
-      editableWatch.observe(editor.view.dom, { attributes: true, attributeFilter: ["contenteditable"] });
+      // The note becomes editable (or read-only) after its code blocks are drawn. (`view`,
+      // not editor.view: blocks in the starting content are drawn before that exists.)
+      const editableWatch = new MutationObserver(() => (select.disabled = !view.editable));
+      editableWatch.observe(view.dom, { attributes: true, attributeFilter: ["contenteditable"] });
 
       select.addEventListener("change", () => {
         const pos = getPos();

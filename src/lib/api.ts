@@ -132,6 +132,18 @@ export const api = {
       throw new Error(typeof err === "string" ? err : String((err as Error)?.message ?? err));
     }
   },
+  /** An image attachment's bytes (for Edit Image…). */
+  async attachmentImage(id: string): Promise<ArrayBuffer> {
+    if (!isTauri) {
+      const { attachmentUrl } = await import("./attachmentUrls");
+      return (await fetch(attachmentUrl(id))).arrayBuffer();
+    }
+    try {
+      return await tauriInvoke<ArrayBuffer>("attachment_image", { id });
+    } catch (err) {
+      throw new Error(typeof err === "string" ? err : String((err as Error)?.message ?? err));
+    }
+  },
   /** Attach the image on the system clipboard (null if there isn't one). */
   /** Attach what the system clipboard holds: copied files, or else an image. */
   pasteFromClipboard: (noteId: string): Promise<AttachResult> =>

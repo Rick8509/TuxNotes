@@ -307,6 +307,33 @@ pub fn open_attachment(app: AppHandle, state: State<'_, AppState>, id: String) -
         .map_err(|e| format!("Couldn't open the file: {e}"))
 }
 
+/// An image attachment's bytes, for Edit Image… (rotating, flipping and cropping happen in
+/// the page; the result is added as a new attachment).
+#[tauri::command]
+pub async fn attachment_image(app: AppHandle, id: String) -> CmdResult<tauri::ipc::Response> {
+    if !is_valid_id(&id) {
+        return Err("That image wasn't found.".into());
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let (attachment, path) = {
+            let store = state.store.lock().map_err(|_| "note store unavailable")?;
+            let attachment = store.get_attachment(&id).map_err(err)?;
+            let path = store
+                .attachment_path(&state.attachments_dir, &id)
+                .map_err(err)?;
+            (attachment, path)
+        };
+        if !attachment.is_image() {
+            return Err("That attachment isn't an image.".to_string());
+        }
+        let bytes = std::fs::read(&path).map_err(|e| format!("Couldn't read the image: {e}"))?;
+        Ok(tauri::ipc::Response::new(bytes))
+    })
+    .await
+    .map_err(err)?
+}
+
 /// Ask where to save a copy of an attachment, then copy it there. Returns whether it was saved.
 #[tauri::command]
 pub async fn save_attachment_as(app: AppHandle, id: String) -> CmdResult<bool> {

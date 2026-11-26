@@ -177,6 +177,7 @@ pub fn run() {
             attachments::attach_files,
             attachments::paste_from_clipboard,
             attachments::open_attachment,
+            attachments::attachment_image,
             attachments::save_attachment_as,
             export::export_markdown,
             export::pick_markdown_files,

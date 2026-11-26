@@ -9,7 +9,9 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, errorText, isTauri } from "../api";
   import { NOTE_DRAG_TYPE } from "../dnd";
-  import { nodeForAttachment } from "../editor/attachmentNodes";
+  import { nodeForAttachment, parseImageWidth } from "../editor/attachmentNodes";
+  import { NO_EDITS, outputMime, outputName, renderEdited, rotate, sniffMime } from "../imageEdit";
+  import ImageEditor from "./ImageEditor.svelte";
   import { contentExtensions } from "../editor/content";
   import { ChecklistSort, checklistActions } from "../editor/checklist";
   import { SearchHighlight, getSearch, goToMatch, scrollToPos, setSearch } from "../editor/search";
@@ -466,6 +468,101 @@
     ];
   }
 
+  // ------------------------------------------------------------------ images
+
+  /** Image being edited in Edit Image… (with where it was when the menu opened). */
+  let imageEdit = $state<{ attachmentId: string; name: string; pos: number } | null>(null);
+
+  /** Right-click on an image: edit, rotate, sizes. */
+  function imageMenu(pos: number, attachmentId: string): MenuItem[] {
+    const node = editor?.state.doc.nodeAt(pos);
+    const width = parseImageWidth(node?.attrs.width);
+    const name = (node?.attrs.alt as string | null) || "image";
+    const size = (label: string, value: number | null) => ({
+      label: width === value ? `✓  ${label}` : `     ${label}`,
+      action: () => setImageWidth(pos, attachmentId, value),
+    });
+    return [
+      { label: "Edit Image…", action: () => (imageEdit = { attachmentId, name, pos }) },
+      { label: "Rotate Left", action: () => void quickRotate(pos, attachmentId, -1) },
+      { label: "Rotate Right", action: () => void quickRotate(pos, attachmentId, 1) },
+      { kind: "separator" },
+      { kind: "heading", label: "Size" },
+      size("Small", 25),
+      size("Medium", 50),
+      size("Large", 75),
+      size("Full Width", 100),
+      size("Original Size", null),
+    ];
+  }
+
+  /** Where the image is now: at `pos` if it's still there, else the first one showing it. */
+  function findImage(pos: number, attachmentId: string): number | null {
+    const doc = editor?.state.doc;
+    if (!doc) return null;
+    const at = pos < doc.content.size ? doc.nodeAt(pos) : null;
+    if (at?.type.name === "image" && at.attrs.attachmentId === attachmentId) return pos;
+    let found: number | null = null;
+    doc.descendants((n, p) => {
+      if (found === null && n.type.name === "image" && n.attrs.attachmentId === attachmentId) found = p;
+      return found === null;
+    });
+    return found;
+  }
+
+  function setImageAttrs(pos: number, attachmentId: string, attrs: Record<string, unknown>) {
+    const ed = editor;
+    const at = findImage(pos, attachmentId);
+    if (!ed || at === null) return;
+    const node = ed.state.doc.nodeAt(at)!;
+    ed.chain()
+      .command(({ tr }) => {
+        tr.setNodeMarkup(at, undefined, { ...node.attrs, ...attrs });
+        return true;
+      })
+      .setNodeSelection(at)
+      .focus()
+      .run();
+  }
+
+  function setImageWidth(pos: number, attachmentId: string, width: number | null) {
+    setImageAttrs(pos, attachmentId, { width });
+  }
+
+  /** The edited image becomes a new attachment shown in place of the old one. Undo brings
+   *  the old one back (unused attachments are only cleaned up after a day). */
+  async function replaceImage(pos: number, oldId: string, blob: Blob, mime: string, name: string) {
+    const noteId = loadedId;
+    if (!noteId) return;
+    // The browser engine may not write every format (WebP): it then gives PNG instead.
+    const actual = blob.type || mime;
+    const file = new File([blob], outputName(name, actual), { type: actual });
+    const added = await api.addAttachment(noteId, file);
+    if (loadedId !== noteId) return; // switched notes meanwhile
+    setImageAttrs(pos, oldId, { attachmentId: added.id });
+  }
+
+  async function quickRotate(pos: number, attachmentId: string, direction: 1 | -1) {
+    try {
+      const bytes = new Uint8Array(await api.attachmentImage(attachmentId));
+      const type = sniffMime(bytes);
+      const url = URL.createObjectURL(new Blob([bytes], { type }));
+      try {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const mime = outputMime(type);
+        const blob = await renderEdited(img, img.naturalWidth, img.naturalHeight, rotate(NO_EDITS, direction), mime);
+        const name = (editor?.state.doc.nodeAt(pos)?.attrs.alt as string | null) || "image";
+        await replaceImage(pos, attachmentId, blob, mime, name);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      app.showError(`Couldn't rotate the image: ${errorText(e)}`);
+    }
+  }
+
   /**
    * Right-click: TuxNotes' own menus where there's no text (images and files, a checklist
    * item's checkbox, a multi-cell table selection). On text the system menu stays, with
@@ -481,8 +578,10 @@
       const id = attachmentEl.dataset.attachmentId!;
       const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
       if (at && at.inside >= 0) ed.commands.setNodeSelection(at.inside);
+      const node = at && at.inside >= 0 ? ed.state.doc.nodeAt(at.inside) : null;
       const items = attachmentMenu(id);
-      tableMenu = { x: event.clientX, y: event.clientY, items: ed.isEditable ? items : items.slice(0, 2) };
+      const all = node?.type.name === "image" && ed.isEditable ? [...imageMenu(at!.inside, id), { kind: "separator" as const }, ...items] : items;
+      tableMenu = { x: event.clientX, y: event.clientY, items: ed.isEditable ? all : items.slice(0, 2) };
       return true;
     }
     if (target.closest('ul[data-type="taskList"] > li > label') && ed.isEditable) {
@@ -854,6 +953,22 @@
   <ContextMenu {...tableMenu} onclose={() => (tableMenu = null)} />
 {/if}
 
+{#if imageEdit}
+  {@const edit = imageEdit}
+  <ImageEditor
+    attachmentId={edit.attachmentId}
+    name={edit.name}
+    onclose={() => {
+      imageEdit = null;
+      editor?.commands.focus();
+    }}
+    onsave={async (blob, mime) => {
+      await replaceImage(edit.pos, edit.attachmentId, blob, mime, edit.name);
+      imageEdit = null;
+    }}
+  />
+{/if}
+
 <style>
   .lock-now {
     color: var(--accent-strong);
@@ -1155,14 +1270,62 @@
   }
 
   /* ----------------------------------------------------------- attachments */
+  /* Images: natural size (at most the note's width and 75% of the window's height), or a
+     chosen width in percent (the frame's width; see ImageNode). */
+  .scroll :global(.prose .note-image-frame) {
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0.6em 0;
+    border-radius: var(--radius-md);
+  }
   .scroll :global(.prose img.note-image) {
     display: block;
     max-width: 100%;
     max-height: 75vh;
     height: auto;
-    margin: 0.6em 0;
     border-radius: var(--radius-md);
     cursor: default;
+  }
+  .scroll :global(.prose .note-image-frame.sized img.note-image) {
+    width: 100%;
+    max-height: none;
+  }
+  .scroll :global(.prose .note-image-handle) {
+    position: absolute;
+    right: -7px;
+    bottom: -7px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg-editor);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    cursor: nwse-resize;
+    opacity: 0;
+    transition: opacity 0.12s;
+    touch-action: none;
+  }
+  .scroll :global(.prose[contenteditable="true"] .note-image-frame:hover .note-image-handle),
+  .scroll :global(.prose[contenteditable="true"] .note-image-frame.ProseMirror-selectednode .note-image-handle),
+  .scroll :global(.prose .note-image-frame.resizing .note-image-handle) {
+    opacity: 1;
+  }
+  .scroll :global(.prose .note-image-badge) {
+    display: none;
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    pointer-events: none;
+  }
+  .scroll :global(.prose .note-image-frame.resizing .note-image-badge) {
+    display: block;
   }
   .scroll :global(.prose .note-file) {
     display: flex;
@@ -1209,7 +1372,7 @@
     font-size: 0.8em;
     color: var(--text-secondary);
   }
-  .scroll :global(.prose .ProseMirror-selectednode.note-image),
+  .scroll :global(.prose .ProseMirror-selectednode.note-image-frame),
   .scroll :global(.prose .ProseMirror-selectednode.note-file) {
     outline: 3px solid var(--accent);
     outline-offset: 2px;

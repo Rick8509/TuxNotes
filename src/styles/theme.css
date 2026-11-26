@@ -285,6 +285,10 @@ input {
   .prose img.note-image {
     max-height: none !important;
   }
+  .prose .note-image-handle,
+  .prose .note-image-badge {
+    display: none !important;
+  }
   .prose img.note-image,
   .prose table,
   .prose .note-file,

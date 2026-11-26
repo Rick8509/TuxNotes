@@ -7,7 +7,21 @@ import { formatBytes } from "../format";
 import type { Attachment } from "../types";
 import { IMAGE_MIMES } from "../types";
 
-/** An image shown inline, full width at most. */
+/** Sizes images snap to while resizing (percent of the note's width). */
+export const IMAGE_SIZES = [25, 50, 75, 100];
+/** Smallest image width while resizing, in pixels. */
+const MIN_IMAGE_PX = 48;
+
+/** "50" → 50; anything outside 5–100 → null (natural size). */
+export function parseImageWidth(value: unknown): number | null {
+  const n = Math.round(Number(value));
+  return Number.isFinite(n) && n >= 5 && n <= 100 ? n : null;
+}
+
+/**
+ * An image shown inline: at its natural size (full width at most), or at `width` percent
+ * of the note's width when resized (drag the corner handle, or right-click → a size).
+ */
 export const ImageNode = Node.create({
   name: "image",
   group: "block",
@@ -27,6 +41,93 @@ export const ImageNode = Node.create({
         parseHTML: (el) => el.getAttribute("alt"),
         renderHTML: (attrs) => (attrs.alt ? { alt: attrs.alt } : {}),
       },
+      width: {
+        default: null,
+        parseHTML: (el) => parseImageWidth(el.getAttribute("data-width")),
+        renderHTML: (attrs) => (attrs.width ? { "data-width": String(attrs.width), style: `width: ${attrs.width}%` } : {}),
+      },
+    };
+  },
+
+  // In the editor: the image in a frame with a resize handle (bottom-right corner).
+  addNodeView() {
+    return ({ node, editor, getPos }) => {
+      let current = node;
+      const dom = document.createElement("div");
+      dom.className = "note-image-frame";
+      const img = document.createElement("img");
+      img.className = "note-image";
+      img.draggable = false;
+      const handle = document.createElement("span");
+      handle.className = "note-image-handle";
+      handle.title = "Drag to resize";
+      const badge = document.createElement("span");
+      badge.className = "note-image-badge";
+      dom.append(img, handle, badge);
+
+      const show = (n: typeof node) => {
+        const id = n.attrs.attachmentId as string | null;
+        const url = attachmentUrl(id);
+        if (img.getAttribute("src") !== url) img.src = url;
+        img.alt = (n.attrs.alt as string | null) ?? "";
+        dom.dataset.attachmentId = id ?? "";
+        const width = parseImageWidth(n.attrs.width);
+        dom.style.width = width ? `${width}%` : "";
+        dom.classList.toggle("sized", width !== null);
+      };
+      show(node);
+
+      handle.addEventListener("pointerdown", (down) => {
+        if (!editor.isEditable || down.button !== 0) return;
+        down.preventDefault();
+        down.stopPropagation();
+        handle.setPointerCapture(down.pointerId);
+        const container = dom.parentElement?.clientWidth || dom.getBoundingClientRect().width;
+        const left = dom.getBoundingClientRect().left;
+        let width: number | null = null;
+        const move = (e: PointerEvent) => {
+          const px = Math.max(MIN_IMAGE_PX, e.clientX - left);
+          let pct = Math.min(100, (px / container) * 100);
+          const snap = IMAGE_SIZES.find((s) => Math.abs(s - pct) < 2.5);
+          pct = Math.max(5, Math.round(snap ?? pct));
+          width = pct;
+          dom.style.width = `${pct}%`;
+          dom.classList.add("sized", "resizing");
+          badge.textContent = pct === 100 ? "Full width" : `${pct}%`;
+        };
+        const done = () => {
+          handle.removeEventListener("pointermove", move);
+          dom.classList.remove("resizing");
+          const pos = getPos();
+          if (width === null || typeof pos !== "number") return show(current);
+          const attrs = { ...current.attrs, width };
+          editor
+            .chain()
+            .command(({ tr }) => {
+              tr.setNodeMarkup(pos, undefined, attrs);
+              return true;
+            })
+            .setNodeSelection(pos)
+            .focus()
+            .run();
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", done, { once: true });
+        handle.addEventListener("pointercancel", done, { once: true });
+      });
+
+      return {
+        dom,
+        update: (n) => {
+          if (n.type !== current.type) return false;
+          current = n;
+          show(n);
+          return true;
+        },
+        // The handle is ours: ProseMirror shouldn't select or drag on it.
+        stopEvent: (e) => e.target === handle,
+        ignoreMutation: () => true,
+      };
     };
   },
 

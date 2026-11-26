@@ -40,7 +40,7 @@ Run the command in the folder you downloaded to (usually `cd ~/Downloads` first)
 - Checklists with round checkboxes (ticked items move to the bottom; right-click for Check All, Uncheck All, Delete Checked Items), plus bulleted and numbered lists
 - **Tables**: insert from the toolbar, right-click a cell to add or remove rows and columns, Tab between cells, drag borders to resize columns
 - **Export and import**: save a note as Markdown (attachments are copied next to it) or as a PDF, print it, and import Markdown files as notes (checklists, tables and images included). All from the **⋯** button in the editor
-- **Images and attachments**: paste a screenshot, drag in files, or use the paperclip button. Images show in the note; other files appear as chips you can open (double-click) or save a copy of. Attachments are included in backups
+- **Images and attachments**: paste a screenshot, drag in files, or use the paperclip button. Images show in the note and can be resized (drag the corner handle) and rotated, flipped or cropped (right-click → Edit Image…); other files appear as chips you can open (double-click) or save a copy of. Attachments are included in backups
 - Pinned notes, folders with **subfolders** (drag folders to nest or reorder them), and **Recently Deleted** (notes are removed permanently after 30 days)
 - **Undo** right after deleting a note, **duplicate** notes, and **Note Info** (word count, dates, folder)
 - **Password-locked notes**: lock any note from its ⋯ menu; its text is encrypted until you enter the password (see [Locked notes](#locked-notes))

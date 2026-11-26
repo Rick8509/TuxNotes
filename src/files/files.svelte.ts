@@ -2,11 +2,15 @@
 // drops or the command line (see src-tauri/src/files.rs).
 import { api, errorText } from "../lib/api";
 import type { FileEntry, TextFile } from "../lib/types";
+import type { Indentation } from "./languages";
 
 export interface FileTab extends FileEntry {
   state: "loading" | "ready" | "error";
   file?: TextFile;
   error?: string;
+  /** Language for syntax colours ("Plain Text" for none), detected or picked. */
+  language?: string;
+  indentation?: Indentation;
 }
 
 class Files {
@@ -44,6 +48,11 @@ class Files {
     } catch (e) {
       this.update(id, { state: "error", error: errorText(e) });
     }
+  }
+
+  /** Language and indentation, once the code view knows them (or the user picks one). */
+  setInfo(id: string, info: { language: string; indentation?: Indentation }) {
+    this.update(id, info);
   }
 
   private update(id: string, patch: Partial<FileTab>) {

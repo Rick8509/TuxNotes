@@ -4,15 +4,27 @@
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { listen } from "@tauri-apps/api/event";
-  import { CircleAlert, FileCode, FileText, FolderOpen, Lock, X } from "@lucide/svelte";
+  import { ChevronDown, CircleAlert, FileCode, FileText, FolderOpen, Lock, WrapText, X } from "@lucide/svelte";
   import { api, isTauri } from "../lib/api";
   import { identity } from "../lib/stores/identity.svelte";
   import { ui } from "../lib/stores/ui.svelte";
   import WindowControls from "../lib/components/WindowControls.svelte";
-  import CodeView from "./CodeView.svelte";
+  import CodeView, { type CursorInfo } from "./CodeView.svelte";
+  import LanguagePicker from "./LanguagePicker.svelte";
   import { files } from "./files.svelte";
+  import { filesPrefs } from "./filesPrefs.svelte";
 
   const active = $derived(files.active);
+  let cursor = $state<CursorInfo | null>(null);
+  let pickerOpen = $state(false);
+  let codeView = $state<ReturnType<typeof CodeView>>();
+
+  function pickLanguage(language: string) {
+    pickerOpen = false;
+    if (!active) return;
+    files.setInfo(active.id, { language });
+    codeView?.setLanguage(language);
+  }
 
   /** Plain text files get a text icon, everything else a code icon. */
   const isPlainText = (name: string) => /\.(txt|text|md|markdown|log|rst|csv)$/i.test(name) || !name.includes(".");
@@ -28,6 +40,12 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
+    // Alt+Z: word wrap on/off (as in VS Code).
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyZ") {
+      e.preventDefault();
+      filesPrefs.setWrap(!filesPrefs.wrap);
+      return;
+    }
     const mod = e.ctrlKey || e.metaKey;
     if (!mod || e.altKey) return;
     const key = e.key.toLowerCase();
@@ -131,7 +149,16 @@
     {:else if active.state === "loading" || !active.file}
       <div class="empty"><p class="hint">Opening “{active.name}”…</p></div>
     {:else}
-      <CodeView id={active.id} text={active.file.text} openIds={files.tabs.map((t) => t.id)} />
+      <CodeView
+        bind:this={codeView}
+        id={active.id}
+        name={active.name}
+        text={active.file.text}
+        openIds={files.tabs.map((t) => t.id)}
+        wrap={filesPrefs.wrap}
+        oncursor={(info) => (cursor = info)}
+        onlanguage={(tabId, language, indentation) => files.setInfo(tabId, { language, indentation })}
+      />
     {/if}
   </main>
 
@@ -142,9 +169,30 @@
       {#if active.file.readOnly}
         <span class="badge" title="You don't have permission to change this file."><Lock size={11} /> Read-only</span>
       {/if}
+      {#if cursor}
+        <span class="cursor">Ln {cursor.line}, Col {cursor.column}{cursor.selected ? ` (${cursor.selected} selected)` : ""}</span>
+      {/if}
+      {#if active.indentation}
+        <span title="How this file is indented">{active.indentation.tabs ? "Tabs" : `Spaces: ${active.indentation.size}`}</span>
+      {/if}
+      <button class="status-btn" title="Choose the language for colours" onclick={() => (pickerOpen = !pickerOpen)}>
+        {active.language ?? "Plain Text"} <ChevronDown size={11} />
+      </button>
+      <button
+        class="status-btn"
+        class:on={filesPrefs.wrap}
+        title="Word wrap (Alt+Z)"
+        aria-pressed={filesPrefs.wrap}
+        onclick={() => filesPrefs.setWrap(!filesPrefs.wrap)}
+      >
+        <WrapText size={13} /> Wrap
+      </button>
       <span>{active.file.encoding}</span>
       <span>{active.file.lineEnding}</span>
     </footer>
+    {#if pickerOpen}
+      <LanguagePicker current={active.language ?? "Plain Text"} onpick={pickLanguage} onclose={() => (pickerOpen = false)} />
+    {/if}
   {/if}
 </div>
 
@@ -325,6 +373,26 @@
     white-space: nowrap;
     direction: rtl;
     text-align: left;
+  }
+  .cursor {
+    font-variant-numeric: tabular-nums;
+  }
+  .status-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 5px;
+    color: inherit;
+    font-size: inherit;
+  }
+  .status-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+  .status-btn.on {
+    color: var(--accent-strong);
   }
   .badge {
     display: inline-flex;

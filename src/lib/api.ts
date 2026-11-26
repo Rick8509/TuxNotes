@@ -9,6 +9,7 @@ import type {
   FileEntry,
   FileStatus,
   TextFile,
+  UpdateInfo,
   SpellingInfo,
   AttachResult,
   Attachment,
@@ -100,6 +101,8 @@ export const api = {
   appInfo: () => call<AppInfo>("app_info"),
 
   spellingInfo: () => call<SpellingInfo>("spelling_info"),
+  /** Ask GitHub for the latest release (Settings → Updates). */
+  checkForUpdate: () => call<UpdateInfo>("check_for_update"),
 
   // Files window (text and code files, see src-tauri/src/files.rs)
   takePendingFiles: () => call<FileEntry[]>("take_pending_files"),

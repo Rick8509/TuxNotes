@@ -50,6 +50,7 @@ Run the command in the folder you downloaded to (usually `cd ~/Downloads` first)
 - Notes grouped like Apple Notes (Pinned, Today, Yesterday, Previous 7 Days, …); drag a note onto a folder to move it
 - **Settings** (`Ctrl+,`): sort notes by date edited, date created or title; date grouping on or off; how new notes start; System, Light or Dark theme; editor text size
 - Autosave, keyboard-first workflow
+- **Update notice**: once a day TuxNotes asks GitHub whether a newer version is out and shows a small card if so (Settings → General → Updates turns this off; nothing else is sent)
 - Small and fast: built with [Tauri](https://tauri.app) and stored in a single SQLite file
 
 ### Keyboard shortcuts

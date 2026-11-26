@@ -136,6 +136,15 @@ export interface FileStatus {
 export const CHANGED_ON_DISK = "CHANGED_ON_DISK";
 export const UNMAPPABLE = "UNMAPPABLE";
 
+/** The latest TuxNotes release (see src-tauri/src/updates.rs). */
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  newer: boolean;
+  /** Its release page. */
+  url: string;
+}
+
 /** Spelling dictionaries installed on this computer (see src-tauri/src/spelling.rs). */
 export interface SpellingInfo {
   /** e.g. ["de_DE", "en_US"] */

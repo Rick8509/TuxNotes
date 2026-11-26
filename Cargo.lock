@@ -5386,6 +5386,7 @@ dependencies = [
  "keyring",
  "log",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "tauri",
@@ -5398,6 +5399,7 @@ dependencies = [
  "tuxnotes-core",
  "tuxnotes-gdrive",
  "webkit2gtk",
+ "wiremock",
  "zeroize",
 ]
 

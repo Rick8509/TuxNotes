@@ -31,9 +31,15 @@ zeroize.workspace = true
 log = "0.4"
 # Reading text files in other encodings (UTF-16, Windows-1252) in the Files window.
 encoding_rs = "0.8"
+# Comparing versions for the update notice (updates.rs).
+semver = "1"
 # Same folder rules as Tauri, for moving data from the old app ID (legacy_id.rs).
 dirs = "7"
 env_logger = "0.11"
+
+[dev-dependencies]
+wiremock.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 # Silent "Export as PDF" uses WebKitGTK's print engine directly (same versions as Tauri's).
 [target.'cfg(target_os = "linux")'.dependencies]

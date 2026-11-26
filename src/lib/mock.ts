@@ -448,6 +448,17 @@ Object.assign(handlers, {
     mockQueueFile("/home/you/Documents/example.py", 'def greet(name):\n    print(f"Hello, {name}!")\n\ngreet("TuxNotes")\n');
     return 1;
   },
+  // The "latest release": localStorage "tuxnotes-mock-latest" ("0.1.0" by default; "offline" fails).
+  check_for_update: () => {
+    const g = globalThis as { __updateChecks?: number };
+    g.__updateChecks = (g.__updateChecks ?? 0) + 1;
+    const latest = localStorage.getItem("tuxnotes-mock-latest") ?? "0.1.0";
+    if (latest === "offline") fail("Couldn't reach GitHub. Are you online?");
+    const parts = (v: string) => v.split(".").map(Number);
+    const [a, b] = [parts(latest), parts("0.1.0")];
+    const newer = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    return { current: "0.1.0", latest, newer: newer > 0, url: `https://github.com/Rick8509/TuxNotes/releases/tag/v${latest}` };
+  },
   spelling_info: () => ({ available: MOCK_DICTIONARIES, systemDefault: ["en_US"] }),
   set_spelling: ({ enabled, languages }: Args) => {
     const langs = (languages as string[]).length ? (languages as string[]) : ["en_US"];

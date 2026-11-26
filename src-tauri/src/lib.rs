@@ -9,6 +9,7 @@ mod identity;
 mod legacy_id;
 mod settings;
 mod spelling;
+mod updates;
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -173,6 +174,7 @@ pub fn run() {
             files::save_text_file_as,
             spelling::spelling_info,
             spelling::set_spelling,
+            updates::check_for_update,
             attachments::add_attachment,
             attachments::attach_files,
             attachments::paste_from_clipboard,

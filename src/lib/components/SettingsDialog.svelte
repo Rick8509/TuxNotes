@@ -9,6 +9,8 @@
   import type { AppInfo } from "../types";
   import { identity } from "../stores/identity.svelte";
   import { languageName, spelling } from "../stores/spelling.svelte";
+  import { updates } from "../stores/updates.svelte";
+  import { formatRelativeDateTime } from "../format";
   import BackupPanel, { type BackupView } from "./BackupPanel.svelte";
 
   const REPO_URL = "https://github.com/Rick8509/TuxNotes";
@@ -278,6 +280,49 @@
           {/if}
         </div>
 
+        <h3 class="subhead">Updates</h3>
+        <div class="group">
+          <label class="row">
+            <div class="label">
+              <span>Check for new versions</span>
+              <span class="hint">
+                Once a day, TuxNotes asks GitHub whether a newer version is out. Nothing else is sent.
+                {#if identity.dev}TuxNotes Dev doesn't check by itself.{/if}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              class="switch"
+              checked={prefs.checkUpdates}
+              onchange={(e) => prefs.set("checkUpdates", e.currentTarget.checked)}
+            />
+          </label>
+          <div class="row">
+            <div class="label">
+              <span class="update-status" role="status">
+                {#if updates.checking}
+                  Checking…
+                {:else if updates.error}
+                  {updates.error}
+                {:else if updates.newer}
+                  TuxNotes {updates.newer.latest} is out.
+                {:else if updates.info}
+                  You're up to date ({identity.version}).
+                {:else}
+                  Not checked yet.
+                {/if}
+              </span>
+              {#if updates.lastCheck}
+                <span class="hint">Last checked: {formatRelativeDateTime(updates.lastCheck)}</span>
+              {/if}
+            </div>
+            {#if updates.newer && !updates.checking}
+              <button class="btn" onclick={() => updates.openReleasePage().catch((e) => app.showError(`Couldn't open the browser: ${e}`))}>Get It</button>
+            {/if}
+            <button class="btn" disabled={updates.checking} onclick={() => updates.check()}>Check Now</button>
+          </div>
+        </div>
+
         <h3 class="subhead">Locked Notes</h3>
         <div class="group">
           <div class="row">
@@ -366,6 +411,12 @@
             {info?.dev ? "Test build with its own notes. Your TuxNotes notes aren't touched." : "Open notes for Linux"}
           </p>
           <p class="muted">Version {info?.version ?? "…"} · MIT License</p>
+          {#if updates.newer}
+            <p class="about-update">
+              TuxNotes {updates.newer.latest} is out.
+              <button class="link" onclick={() => updates.openReleasePage().catch((e) => app.showError(`Couldn't open the browser: ${e}`))}>Get it</button>
+            </p>
+          {/if}
           <div class="about-actions">
             <button class="btn" onclick={openRepo}>GitHub</button>
             <button class="btn" disabled={!info} onclick={openNotesFolder}>Open Notes Folder</button>
@@ -527,6 +578,16 @@
     font-family: var(--font-mono);
     font-size: 11px;
     color: var(--text-tertiary);
+  }
+  .about-update {
+    margin: 4px 0 0;
+    font-weight: 500;
+  }
+  .link {
+    color: var(--accent-strong);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   .subhead {
     margin: 22px 0 8px;

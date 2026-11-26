@@ -10,6 +10,7 @@
   import { prefs } from "./lib/stores/prefs.svelte";
   import { identity } from "./lib/stores/identity.svelte";
   import { spelling } from "./lib/stores/spelling.svelte";
+  import { updates } from "./lib/stores/updates.svelte";
   import Editor from "./lib/components/Editor.svelte";
   import NoteList from "./lib/components/NoteList.svelte";
   import NoteInfoDialog from "./lib/components/NoteInfoDialog.svelte";
@@ -33,6 +34,8 @@
 
   onMount(() => {
     identity.load();
+    // "A new version is out" (Settings → General → Updates).
+    updates.start();
     void app.init();
     const cleanups: (() => void)[] = [];
 

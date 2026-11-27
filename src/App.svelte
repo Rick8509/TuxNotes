@@ -5,6 +5,7 @@
   import { app } from "./lib/stores/app.svelte";
   import { ui } from "./lib/stores/ui.svelte";
   import { printNote } from "./lib/importExport";
+  import CommandPalette from "./lib/components/CommandPalette.svelte";
   import ConfirmDialog from "./lib/components/ConfirmDialog.svelte";
   import LockDialog from "./lib/components/LockDialog.svelte";
   import { prefs } from "./lib/stores/prefs.svelte";
@@ -115,7 +116,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (app.confirmRequest || app.settingsSection || app.showNoteInfo || app.lockPrompt) return;
+    if (app.confirmRequest || app.settingsSection || app.showNoteInfo || app.lockPrompt || app.paletteOpen) return;
 
     if (e.key === "F11") {
       e.preventDefault();
@@ -154,6 +155,11 @@
     if (key === "p" && !e.shiftKey) {
       e.preventDefault();
       if (app.current) void printNote();
+    } else if (key === "p" && e.shiftKey) {
+      // The command palette: every action, folder and note in one search box.
+      e.preventDefault();
+      if (ui.sidebarOverlay) ui.closeOverlay();
+      app.paletteOpen = true;
     } else if (key === "o" && !e.shiftKey) {
       // Open a text or code file in the Files window.
       e.preventDefault();
@@ -208,7 +214,7 @@
     class="app"
     class:animate={!ui.resizing}
     style:grid-template-columns={ui.columns}
-    inert={!!(app.settingsSection || app.confirmRequest || app.lockPrompt || app.showNoteInfo)}
+    inert={!!(app.settingsSection || app.confirmRequest || app.lockPrompt || app.showNoteInfo || app.paletteOpen)}
   >
     <Sidebar />
     <NoteList />
@@ -220,6 +226,9 @@
     <div class="overlay-scrim" role="presentation" onmousedown={() => ui.closeOverlay()}></div>
   {/if}
 
+  {#if app.paletteOpen}
+    <CommandPalette />
+  {/if}
   {#if app.settingsSection}
     <SettingsDialog />
   {/if}

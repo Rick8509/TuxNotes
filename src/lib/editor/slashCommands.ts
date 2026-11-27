@@ -244,8 +244,15 @@ function subsequence(text: string, q: string): number {
   return points;
 }
 
+/** Anything found by typing: a title and other words for it. */
+export interface Matchable {
+  title: string;
+  /** Other words people may type to find it. */
+  keywords: string[];
+}
+
 /** How well `query` matches a command: 0 for no match, higher is better. */
-export function matchScore(cmd: SlashCommand, query: string): number {
+export function matchScore(cmd: Matchable, query: string): number {
   const q = norm(query);
   if (!q) return 1;
   const title = norm(cmd.title);
@@ -258,6 +265,11 @@ export function matchScore(cmd: SlashCommand, query: string): number {
   if (keywords.some((k) => k.startsWith(q))) return 700;
   if (title.includes(q)) return 600;
   if (keywords.some((k) => k.includes(q))) return 500;
+  // Several words ("export pdf"): each starts a word of the title or its other words.
+  if (q.includes(" ")) {
+    const known = [...words, ...keywords.flatMap((k) => k.split(/[\s-]+/))];
+    if (q.split(/\s+/).every((w) => known.some((k) => k.startsWith(w)))) return 400;
+  }
   // Abbreviations like "chk" or "nlist": letters in order, at least two of them.
   if (q.length >= 2) {
     const best = Math.max(subsequence(title, q), ...keywords.map((k) => subsequence(k, q) * 0.8));
@@ -267,7 +279,7 @@ export function matchScore(cmd: SlashCommand, query: string): number {
 }
 
 /** The commands matching `query`, best first (in menu order when the query is empty). */
-export function filterCommands(commands: SlashCommand[], query: string): SlashCommand[] {
+export function filterCommands<T extends Matchable>(commands: T[], query: string): T[] {
   if (!norm(query)) return commands;
   return commands
     .map((cmd, order) => ({ cmd, order, score: matchScore(cmd, query) }))

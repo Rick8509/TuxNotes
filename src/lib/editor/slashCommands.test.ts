@@ -74,3 +74,21 @@ describe("slash command matching", () => {
     }
   });
 });
+
+describe("matching several words (command palette)", () => {
+  const items = [
+    { title: "Export as PDF…", keywords: ["save", "pdf", "download"] },
+    { title: "Export as Markdown…", keywords: ["save", "md", "download"] },
+    { title: "Use Dark Appearance", keywords: ["theme", "dark mode", "night"] },
+    { title: "Print…", keywords: ["printer", "paper"] },
+  ];
+  it("finds titles where each typed word starts a word", () => {
+    expect(filterCommands(items, "export pdf").map((i) => i.title)).toEqual(["Export as PDF…"]);
+    expect(filterCommands(items, "save md").map((i) => i.title)).toEqual(["Export as Markdown…"]);
+    expect(filterCommands(items, "dark mode")[0].title).toBe("Use Dark Appearance");
+  });
+  it("needs every word", () => {
+    expect(matchScore(items[0], "export word")).toBe(0);
+    expect(filterCommands(items, "print pdf")).toEqual([]);
+  });
+});

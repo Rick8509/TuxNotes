@@ -102,6 +102,7 @@
     {
       group: "Notes",
       items: [
+        ["Command palette: any action, folder or note", "Ctrl+Shift+P"],
         ["New note", "Ctrl+N"],
         ["New folder", "Ctrl+Shift+N"],
         ["Find in the open note", "Ctrl+F (in a note)"],

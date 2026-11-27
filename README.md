@@ -44,6 +44,7 @@ Run the command in the folder you downloaded to (usually `cd ~/Downloads` first)
 - Pinned notes, folders with **subfolders** (drag folders to nest or reorder them), and **Recently Deleted** (notes are removed permanently after 30 days)
 - **Undo** right after deleting a note, **duplicate** notes, and **Note Info** (word count, dates, folder)
 - **Password-locked notes**: lock any note from its ⋯ menu; its text is encrypted until you enter the password (see [Locked notes](#locked-notes))
+- **Command palette** (`Ctrl+Shift+P`): one search box for every action, folder and note ("export pdf", "dark", a note's title or words inside it)
 - Fast full-text search that ignores accents ("cafe" finds "café"); matches are highlighted in the open note, and **Find in note** (`Ctrl+F`) steps through matches
 - **Backup and restore** to a folder (a USB drive, or a folder Nextcloud, Dropbox or Syncthing keeps in sync) or to Google Drive: manual or automatic (daily/weekly), optionally encrypted, keeps the last N backups, and restores on any computer. *Google Drive isn't in the release builds yet; see [Backup](#backup).*
 - Rounded, borderless window. Hide the sidebar, use focus mode to hide both side panes, and drag the dividers to resize them; the window remembers its size and layout
@@ -64,6 +65,7 @@ Run the command in the folder you downloaded to (usually `cd ~/Downloads` first)
 | New folder | `Ctrl+Shift+N` |
 | Find in the open note | `Ctrl+F` (while typing in a note) |
 | Search all notes | `Ctrl+Shift+F` (or `Ctrl+F` elsewhere) |
+| Command palette: any action, folder or note | `Ctrl+Shift+P` |
 | Delete note | `Ctrl+Delete` |
 | Checklist | `Ctrl+Shift+L` |
 | Title / Heading / Subheading / Body | `Ctrl+Shift+T` / `H` / `J` / `B` |

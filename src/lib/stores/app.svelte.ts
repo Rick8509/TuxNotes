@@ -69,6 +69,8 @@ class AppState {
   toast = $state<{ kind: "error" | "info"; message: string; action?: ToastAction } | null>(null);
   /** The "Note Info" window is open. */
   showNoteInfo = $state(false);
+  /** The command palette (Ctrl+Shift+P) is open. */
+  paletteOpen = $state(false);
   /** Section shown in the Settings window, or null when it's closed. */
   settingsSection = $state<SettingsSection | null>(null);
   confirmRequest = $state<ConfirmRequest | null>(null);

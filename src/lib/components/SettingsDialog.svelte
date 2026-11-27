@@ -2,7 +2,7 @@
   // The Settings window (Ctrl+,): General, Appearance, Backup, Shortcuts, About.
   import { onMount } from "svelte";
   import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-  import { Cloud, Info, Keyboard, Palette, SlidersHorizontal, X } from "@lucide/svelte";
+  import { HardDriveUpload, Info, Keyboard, Palette, SlidersHorizontal, X } from "@lucide/svelte";
   import { api, isTauri } from "../api";
   import { app, type SettingsSection } from "../stores/app.svelte";
   import { AUTO_LOCK_CHOICES, prefs, type AutoLock, type FirstLine, type SortBy, type TextSize, type Theme } from "../stores/prefs.svelte";
@@ -15,10 +15,10 @@
 
   const REPO_URL = "https://github.com/Rick8509/TuxNotes";
 
-  const sections: { id: SettingsSection; label: string; icon: typeof Cloud }[] = [
+  const sections: { id: SettingsSection; label: string; icon: typeof Info }[] = [
     { id: "general", label: "General", icon: SlidersHorizontal },
     { id: "appearance", label: "Appearance", icon: Palette },
-    { id: "backup", label: "Backup", icon: Cloud },
+    { id: "backup", label: "Backup", icon: HardDriveUpload },
     { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
     { id: "about", label: "About", icon: Info },
   ];

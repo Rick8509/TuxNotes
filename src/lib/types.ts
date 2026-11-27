@@ -79,6 +79,10 @@ export interface BackupStatus {
   encrypted: boolean;
   /** Back up (if anything changed) when TuxNotes closes. */
   backupOnClose: boolean;
+  /** Backups go to this folder instead of Google Drive. */
+  backupFolder: string | null;
+  /** The folder is there right now (a USB drive may be unplugged). */
+  folderAvailable: boolean;
 }
 
 export interface BackupInfo {

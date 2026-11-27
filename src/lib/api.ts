@@ -95,8 +95,14 @@ export const api = {
   googleCancelSignIn: () => call<void>("google_cancel_sign_in"),
   googleSignOut: () => call<BackupStatus>("google_sign_out"),
   backupNow: () => call<BackupInfo>("backup_now"),
-  listBackups: () => call<BackupInfo[]>("list_backups"),
-  restoreBackup: (id: string, password?: string) => call<RestoreResult>("restore_backup", { id, password: password ?? null }),
+  /** Backups in the backup place, or in `folder` (to restore from). */
+  listBackups: (folder?: string) => call<BackupInfo[]>("list_backups", { folder: folder ?? null }),
+  restoreBackup: (id: string, password?: string, folder?: string) =>
+    call<RestoreResult>("restore_backup", { id, password: password ?? null, folder: folder ?? null }),
+  /** Back up to a folder (a "TuxNotes Backups" folder is made in it); null stops. */
+  setBackupFolder: (folder: string | null) => call<BackupStatus>("set_backup_folder", { folder }),
+  /** The folder dialog; null when cancelled. */
+  pickBackupFolder: (purpose: "backup" | "restore") => call<string | null>("pick_backup_folder", { purpose }),
 
   appInfo: () => call<AppInfo>("app_info"),
 

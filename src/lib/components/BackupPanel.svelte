@@ -3,9 +3,9 @@
 </script>
 
 <script lang="ts">
-  // Settings → Backup. Google Drive backup in the style people know from other apps:
-  // two clear actions, a "we'll open your browser" prompt, then TuxNotes
-  // carries on by itself once you've signed in.
+  // Settings → Backup. Back up to a folder (a USB drive, or a folder Nextcloud, Dropbox
+  // or Syncthing keeps in sync) or to Google Drive, in the style people know from other
+  // apps: one clear action to start, then TuxNotes carries on by itself.
   import { onDestroy, onMount } from "svelte";
   import { listen } from "@tauri-apps/api/event";
   import { openUrl } from "@tauri-apps/plugin-opener";
@@ -14,6 +14,8 @@
     CircleAlert,
     CircleCheck,
     CloudUpload,
+    Folder,
+    FolderOpen,
     HardDriveDownload,
     LoaderCircle,
     Lock,
@@ -37,6 +39,8 @@
   let backups = $state<BackupInfo[] | null>(null);
   let listError = $state<string | null>(null);
   let selectedId = $state<string | null>(null);
+  /** The folder picked to restore from (null: the backup place). */
+  let restoreFolder = $state<string | null>(null);
 
   // Backup password (encrypting) and the password for restoring an encrypted backup.
   const MIN_BACKUP_PASSWORD = 8;
@@ -46,7 +50,18 @@
   let pwBusy = $state(false);
   let restoreTarget = $state<BackupInfo | null>(null);
 
+  /** Google Drive backup is in this copy of TuxNotes. */
   const available = $derived(!!status && status.clientSource !== "none");
+  /** Where backups go: the chosen folder, else Google Drive when signed in. */
+  const place = $derived(status?.backupFolder ? "folder" : status?.signedIn ? "drive" : null);
+  /** The restore list shows a folder's backups (not Google Drive's). */
+  const restoringFromFolder = $derived(!!restoreFolder || place === "folder");
+  /** A backups folder by the folder it's in ("…/Nextcloud/TuxNotes Backups" → "Nextcloud"). */
+  const folderTitle = (dir: string) => {
+    const parts = dir.split("/").filter(Boolean);
+    const last = parts.at(-1) ?? dir;
+    return /^TuxNotes( Dev)? Backups$/.test(last) && parts.length > 1 ? parts.at(-2)! : last;
+  };
   const message = errorText;
   const details = (b: BackupInfo) =>
     [
@@ -106,7 +121,7 @@
       }
     }
     if (which === "backup") await backUp(true);
-    else await openRestore();
+    else await openRestore(null);
   }
 
   async function backUp(firstTime = false) {
@@ -117,8 +132,9 @@
       const info = await api.backupNow();
       await refreshStatus();
       const notes = `${info.noteCount ?? 0} note${info.noteCount === 1 ? "" : "s"}`;
+      const where = place === "folder" ? "the backup folder" : "Google Drive";
       const auto = status?.autoBackup !== "off" ? ` TuxNotes will also back up ${status?.autoBackup} from now on.` : "";
-      app.showInfo(firstTime ? `Backed up ${notes} to Google Drive.${auto}` : `Backed up ${notes} to Google Drive`);
+      app.showInfo(firstTime ? `Backed up ${notes} to ${where}.${auto}` : `Backed up ${notes} to ${where}`);
     } catch (e) {
       app.showError(e);
       await refreshStatus();
@@ -126,12 +142,57 @@
     view = "home";
   }
 
-  async function openRestore() {
+  // ------------------------------------------------------------- folders
+
+  /** Back up to a folder: choose it, then make the first backup there. */
+  async function chooseFolder() {
+    try {
+      const picked = await api.pickBackupFolder("backup");
+      if (!picked) return;
+      status = await api.setBackupFolder(picked);
+    } catch (e) {
+      app.showError(e);
+      return;
+    }
+    await backUp(true);
+  }
+
+  async function stopFolder() {
+    const ok = await app.confirm({
+      title: "Stop backing up to this folder?",
+      message: "The backups already in it stay there. Automatic backups stop until you choose a folder again.",
+      confirmLabel: "Stop",
+    });
+    if (!ok) return;
+    try {
+      status = await api.setBackupFolder(null);
+    } catch (e) {
+      app.showError(e);
+    }
+  }
+
+  /** Restore from a folder of your choice (a new computer, or a USB drive). */
+  async function restoreFromFolder() {
+    let picked: string | null;
+    try {
+      picked = await api.pickBackupFolder("restore");
+    } catch (e) {
+      app.showError(e);
+      return;
+    }
+    if (!picked) return;
+    restoreFolder = picked;
+    await openRestore(picked);
+  }
+
+  /** The list of backups: in `folder`, or (no folder) in the backup place. */
+  async function openRestore(folder: string | null = null) {
+    restoreFolder = folder;
     view = "restore";
     backups = null;
     listError = null;
     try {
-      backups = await api.listBackups();
+      backups = await api.listBackups(folder ?? undefined);
       selectedId = backups[0]?.id ?? null;
     } catch (e) {
       listError = message(e);
@@ -168,10 +229,14 @@
     await app.flush();
     view = "working";
     workingLabel = "Restoring your notes…";
+    const hadPlace = !!place;
     try {
-      const result = await api.restoreBackup(b.id, password);
+      const result = await api.restoreBackup(b.id, password, restoreFolder ?? undefined);
       await app.reloadAll();
-      app.showInfo(`Restored ${result.noteCount} notes from Google Drive`);
+      await refreshStatus();
+      const notes = `${result.noteCount} note${result.noteCount === 1 ? "" : "s"}`;
+      if (!hadPlace && status?.backupFolder) app.showInfo(`Restored ${notes}. New backups will be saved in the same folder.`);
+      else app.showInfo(`Restored ${notes} from ${restoringFromFolder ? "the folder" : "Google Drive"}`);
       app.settingsSection = null;
     } catch (e) {
       // Encrypted and this computer can't open it, or the typed password was wrong: ask (again).
@@ -226,7 +291,7 @@
     const ok = await app.confirm({
       title: "Stop encrypting backups?",
       message:
-        "New backups will be uploaded without a password. Backups already on Google Drive still need their password to be restored.",
+        "New backups will be saved without a password. Backups made before still need their password to be restored.",
       confirmLabel: "Turn Off",
     });
     if (!ok) return;
@@ -300,12 +365,12 @@
     <header>
       {#if view === "restore" || view === "restorePassword"}
         <button class="icon-btn back" aria-label="Back" onclick={() => (view = view === "restore" ? "home" : "restore")}><ArrowLeft size={16} /></button>
-        <h2 id="backup-title">Restore from Google Drive</h2>
+        <h2 id="backup-title">{restoringFromFolder ? "Restore from a Folder" : "Restore from Google Drive"}</h2>
       {:else if view === "password"}
         <button class="icon-btn back" aria-label="Back" onclick={() => (view = "home")}><ArrowLeft size={16} /></button>
         <h2 id="backup-title">Encrypt Backups</h2>
       {:else}
-        <h2 id="backup-title">Google Drive Backup</h2>
+        <h2 id="backup-title">Backup</h2>
       {/if}
     </header>
 
@@ -344,15 +409,25 @@
     {:else if view === "restore"}
       {#if listError}
         <p class="error-box"><CircleAlert size={16} /> {listError}</p>
-        <div class="actions"><button class="btn" onclick={openRestore}>Try Again</button></div>
+        <div class="actions">
+          <button class="link other-folder" onclick={restoreFromFolder}>Another folder…</button>
+          <button class="btn" onclick={() => openRestore(restoreFolder)}>Try Again</button>
+        </div>
       {:else if !backups}
         <div class="center"><LoaderCircle size={22} class="spin" /><span>Looking for your backups…</span></div>
       {:else if backups.length === 0}
         <div class="hero">
           <div class="badge muted"><HardDriveDownload size={26} /></div>
           <h3>No backups yet</h3>
-          <p>There are no TuxNotes backups in {status.account ?? "this Google account"}'s Google Drive.</p>
-          <button class="btn primary wide" onclick={() => backUp(true)}><CloudUpload size={16} /> Back Up Now</button>
+          {#if restoringFromFolder}
+            <p class="path-text">There are no TuxNotes backups in <bdi>{restoreFolder ?? status.backupFolder}</bdi>.</p>
+          {:else}
+            <p>There are no TuxNotes backups in {status.account ?? "this Google account"}'s Google Drive.</p>
+          {/if}
+          {#if !restoreFolder && place}
+            <button class="btn primary wide" onclick={() => backUp(true)}><CloudUpload size={16} /> Back Up Now</button>
+          {/if}
+          <button class="link" onclick={restoreFromFolder}>Look in another folder…</button>
         </div>
       {:else}
         <p class="muted intro">Choose a backup. It replaces the notes on this computer.</p>
@@ -371,6 +446,7 @@
           {/each}
         </div>
         <div class="actions">
+          <button class="link other-folder" onclick={restoreFromFolder}>Another folder…</button>
           <button class="btn" onclick={() => (view = "home")}>Cancel</button>
           <button class="btn primary" disabled={!selectedId} onclick={restoreSelected}>Restore</button>
         </div>
@@ -381,15 +457,15 @@
       <form class="pw-form" onsubmit={savePassword}>
         <div class="badge small-badge"><LockKeyhole size={20} /></div>
         <p>
-          Backups are encrypted on this computer before they're uploaded, so only someone with the password can read
-          them. TuxNotes remembers it here, so automatic backups keep working.
+          Backups are encrypted on this computer before they're saved or uploaded, so only someone with the password
+          can read them. TuxNotes remembers it here, so automatic backups keep working.
         </p>
         <p class="strong">If you forget the password, encrypted backups can't be restored.</p>
         <input type="password" autocomplete="new-password" placeholder={status.encrypted ? "New backup password" : "Backup password"} aria-label="Backup password" bind:value={pw} disabled={pwBusy} use:focus />
         <input type="password" autocomplete="new-password" placeholder="Verify" aria-label="Verify backup password" bind:value={pw2} disabled={pwBusy} />
         <p class="error pw-error" role="alert">{pwError}</p>
         {#if status.encrypted}
-          <p class="small muted">Backups already on Google Drive keep the password they were made with.</p>
+          <p class="small muted">Backups made before keep the password they were made with.</p>
         {/if}
         <div class="actions">
           <button type="button" class="btn" disabled={pwBusy} onclick={() => (view = "home")}>Cancel</button>
@@ -412,55 +488,69 @@
         </div>
       </form>
 
-    <!-- ------------------------------------------------ not available in this build -->
-    {:else if !available}
+    <!-- ------------------------------------------------ nowhere chosen yet -->
+    {:else if !place}
       <div class="hero">
-        <div class="badge muted"><CircleAlert size={26} /></div>
-        <h3>Google Drive backup isn't available</h3>
-        <p>This copy of TuxNotes was built without Google sign-in, so it can't back up to Google Drive yet.</p>
-        <p class="small muted">
-          Your notes are saved on this computer. To keep a copy elsewhere, copy the folder
-          <code>~/.local/share/io.github.Rick8509.TuxNotes</code> while TuxNotes is closed.
-        </p>
-        <p class="small muted">
-          Built it yourself? Save your Google client file as
-          <code>~/.config/io.github.Rick8509.TuxNotes/google-client.json</code> and reopen TuxNotes
-          (see <code>docs/google-setup.md</code>).
-        </p>
-      </div>
-
-    <!-- ------------------------------------------------ not connected -->
-    {:else if !status.signedIn}
-      <div class="hero">
-        <div class="badge"><CloudUpload size={28} /></div>
+        <div class="badge"><FolderOpen size={28} /></div>
         <h3>Keep your notes safe</h3>
         {#if status.lastBackupError}
           <!-- e.g. the Google sign-in expired: backups stopped until you connect again -->
           <p class="error-box"><CircleAlert size={16} /> {status.lastBackupError}</p>
         {/if}
-        <p>Back up your notes to your own Google Drive and restore them on any computer.</p>
-        <button class="btn primary wide" onclick={() => start("backup")}>
-          <CloudUpload size={16} /> Back Up to Google Drive
+        <p>
+          Back up your notes to a folder: on a USB drive, or one that Nextcloud, Dropbox or Syncthing keeps in sync.
+          Restore them on any computer.
+        </p>
+        <button class="btn primary wide" onclick={chooseFolder}>
+          <FolderOpen size={16} /> Back Up to a Folder…
         </button>
-        <button class="btn wide" onclick={() => start("restore")}>
-          <HardDriveDownload size={16} /> Restore from Google Drive
-        </button>
-        <p class="privacy"><Lock size={12} /> TuxNotes can only see the backups it creates.</p>
+        {#if available}
+          <button class="btn wide" onclick={() => start("backup")}>
+            <CloudUpload size={16} /> Back Up to Google Drive
+          </button>
+        {/if}
+        <p class="restore-links">
+          Already have a backup?
+          <button class="link" onclick={restoreFromFolder}>Restore from a folder</button>
+          {#if available}
+            · <button class="link" onclick={() => start("restore")}>Restore from Google Drive</button>
+          {/if}
+        </p>
+        {#if available}
+          <p class="privacy"><Lock size={12} /> On Google Drive, TuxNotes can only see the backups it creates.</p>
+        {/if}
       </div>
 
-    <!-- ------------------------------------------------ connected -->
+    <!-- ------------------------------------------------ backing up (to a folder or Google Drive) -->
     {:else}
       <div class="card">
-        <div class="account">
-          <span class="avatar">{(status.account ?? "G").charAt(0).toUpperCase()}</span>
-          <span class="grow">
-            <span class="email">{status.account ?? "Google account"}</span>
-            <span class="muted small">Connected to Google Drive</span>
-          </span>
-          <button class="link" onclick={disconnect}>Disconnect</button>
-        </div>
+        {#if place === "folder" && status.backupFolder}
+          <div class="account">
+            <span class="avatar folder"><Folder size={17} /></span>
+            <span class="grow">
+              <span class="email">{folderTitle(status.backupFolder)}</span>
+              <span class="muted small path" title={status.backupFolder}><bdi>{status.backupFolder}</bdi></span>
+            </span>
+            <span class="pref-actions">
+              <button class="link" onclick={chooseFolder}>Change…</button>
+              <button class="link" onclick={stopFolder}>Stop</button>
+            </span>
+          </div>
+        {:else}
+          <div class="account">
+            <span class="avatar">{(status.account ?? "G").charAt(0).toUpperCase()}</span>
+            <span class="grow">
+              <span class="email">{status.account ?? "Google account"}</span>
+              <span class="muted small">Connected to Google Drive</span>
+            </span>
+            <button class="link" onclick={disconnect}>Disconnect</button>
+          </div>
+        {/if}
         <div class="last">
-          {#if status.lastBackupError}
+          {#if place === "folder" && !status.folderAvailable}
+            <CircleAlert size={15} class="warn" />
+            <span class="error">Not available right now. If it's on a USB drive, plug it in: backups carry on by themselves.</span>
+          {:else if status.lastBackupError}
             <CircleAlert size={15} class="warn" />
             <span class="error">Last backup failed: {status.lastBackupError}</span>
           {:else if status.lastBackupAt}
@@ -474,7 +564,7 @@
 
       <div class="actions two">
         <button class="btn primary" onclick={() => backUp()}><CloudUpload size={16} /> Back Up Now</button>
-        <button class="btn" onclick={openRestore}><HardDriveDownload size={16} /> Restore…</button>
+        <button class="btn" onclick={() => openRestore(null)}><HardDriveDownload size={16} /> Restore…</button>
       </div>
 
       <div class="prefs">
@@ -487,7 +577,7 @@
           </select>
         </label>
         <label>
-          <span>Keep on Google Drive</span>
+          <span>{place === "folder" ? "Keep in the folder" : "Keep on Google Drive"}</span>
           <select value={String(status.keepBackups)} onchange={(e) => setPreferences(status!.autoBackup, Number(e.currentTarget.value))}>
             {#each [5, 10, 20, 50] as n (n)}
               <option value={String(n)}>Last {n} backups</option>
@@ -519,9 +609,16 @@
         </div>
       </div>
       <p class="privacy left">
-        <Lock size={12} /> Saved in the “TuxNotes Backups” folder in your Google Drive{status.encrypted
-          ? ", encrypted with your backup password"
-          : ""}.
+        <Lock size={12} />
+        {#if place === "folder"}
+          Each backup is one file in this folder with all your notes and pictures{status.encrypted
+            ? ", encrypted with your backup password"
+            : ""}.
+        {:else}
+          Saved in the “TuxNotes Backups” folder in your Google Drive{status.encrypted
+            ? ", encrypted with your backup password"
+            : ""}.
+        {/if}
       </p>
     {/if}
 </div>
@@ -630,6 +727,24 @@
   }
   .fallback {
     font-size: 12px;
+  }
+  .restore-links {
+    margin-top: 4px !important;
+    font-size: 12.5px;
+  }
+  .path,
+  .path-text bdi {
+    overflow-wrap: anywhere;
+  }
+  .path {
+    display: block;
+  }
+  .avatar.folder {
+    border-radius: var(--radius-md);
+  }
+  .actions .other-folder {
+    margin-right: auto;
+    font-size: 12.5px;
   }
 
   /* Connected state */
@@ -831,10 +946,6 @@
     gap: 10px;
     padding: 28px;
     color: var(--text-secondary);
-  }
-  code {
-    font-family: var(--font-mono);
-    font-size: 12px;
   }
   :global(.spin) {
     animation: spin 0.9s linear infinite;

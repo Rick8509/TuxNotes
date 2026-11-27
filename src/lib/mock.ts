@@ -330,9 +330,23 @@ const handlers: Record<string, (a: Args) => unknown> = {
   },
 };
 
-// --------------------------------------------------------- fake Google Drive
+// --------------------------------------------------------- fake Google Drive and folders
+// Folder backups: the folder dialog "picks" globalThis.__mockPickFolder (default
+// /home/you/Nextcloud; null = cancelled). __mockUnplug(path, true) makes a backups folder
+// unavailable, like a USB drive that's unplugged.
 
 type MockBackupFile = { info: BackupInfo; data: string; password: string | null };
+const folderFiles: Record<string, MockBackupFile[]> = {};
+const unplugged = new Set<string>();
+const g = globalThis as unknown as { __mockPickFolder?: string | null; __mockUnplug?: (dir: string, off: boolean) => void };
+g.__mockUnplug = (dir, off) => (off ? unplugged.add(dir) : unplugged.delete(dir));
+const backupsDirIn = (picked: string) =>
+  picked.endsWith("/TuxNotes Backups") || folderFiles[picked]?.length ? picked : `${picked}/TuxNotes Backups`;
+const folderList = (dir: string) => {
+  if (unplugged.has(dir) || !folderFiles[dir])
+    fail(`The backup folder isn't available: ${dir}. If it's on a USB drive, plug the drive in; or choose another folder in Settings → Backup.`);
+  return folderFiles[dir];
+};
 const backup: BackupStatus & { files: MockBackupFile[]; cancel?: () => void; password: string | null } = {
   clientSource: "builtIn",
   signedIn: false,
@@ -344,12 +358,27 @@ const backup: BackupStatus & { files: MockBackupFile[]; cancel?: () => void; pas
   lastBackupError: null,
   encrypted: false,
   backupOnClose: true,
+  backupFolder: null,
+  folderAvailable: false,
   files: [],
   password: null,
 };
 const status = (): BackupStatus => {
   const { files: _f, cancel: _c, password: _p, ...rest } = backup;
-  return { ...rest, encrypted: backup.password !== null };
+  const folderAvailable = !!backup.backupFolder && !unplugged.has(backup.backupFolder);
+  // localStorage "tuxnotes-mock-google" = "off": a copy of TuxNotes without Google sign-in (like the releases).
+  const clientSource = localStorage.getItem("tuxnotes-mock-google") === "off" ? "none" : rest.clientSource;
+  return { ...rest, clientSource, encrypted: backup.password !== null, folderAvailable };
+};
+/** The backups list of the backup place (or of the folder picked to restore from). */
+const placeFiles = (picked?: unknown): { files: MockBackupFile[]; dir: string | null } => {
+  if (typeof picked === "string") {
+    const dir = backupsDirIn(picked);
+    return { files: folderList(dir), dir };
+  }
+  if (backup.backupFolder) return { files: folderList(backup.backupFolder), dir: backup.backupFolder };
+  signedIn();
+  return { files: backup.files, dir: null };
 };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const signedIn = () => backup.signedIn || fail("You're not signed in to Google Drive.");
@@ -502,8 +531,19 @@ Object.assign(handlers, {
     Object.assign(backup, { signedIn: false, account: null });
     return status();
   },
+  pick_backup_folder: () => (g.__mockPickFolder === undefined ? "/home/you/Nextcloud" : g.__mockPickFolder),
+  set_backup_folder: ({ folder }: Args) => {
+    let dir: string | null = null;
+    if (typeof folder === "string") {
+      if (folder.startsWith("/readonly")) fail(`TuxNotes can't save files in ${folder}/TuxNotes Backups: it's read-only`);
+      dir = backupsDirIn(folder);
+      folderFiles[dir] ??= [];
+    }
+    Object.assign(backup, { backupFolder: dir, lastBackupAt: null, lastBackupError: null });
+    return status();
+  },
   backup_now: async () => {
-    signedIn();
+    const place = placeFiles();
     backup.busy = "backingUp";
     await wait(600);
     const t = now();
@@ -519,19 +559,21 @@ Object.assign(handlers, {
       encrypted,
       needsPassword: false,
     };
-    backup.files.unshift({ info, data, password: backup.password });
-    backup.files = backup.files.slice(0, backup.keepBackups);
+    if (place.dir) info.id = info.name;
+    place.files.unshift({ info, data, password: backup.password });
+    place.files.splice(backup.keepBackups);
     Object.assign(backup, { busy: null, lastBackupAt: t, lastBackupError: null });
     return info;
   },
-  list_backups: async () => {
-    signedIn();
+  list_backups: async ({ folder }: Args) => {
+    const { files } = placeFiles(folder);
     await wait(300);
-    return backup.files.map((f) => ({ ...f.info, needsPassword: f.password !== null && f.password !== backup.password }));
+    return files.map((f) => ({ ...f.info, needsPassword: f.password !== null && f.password !== backup.password }));
   },
-  restore_backup: async ({ id, password }: Args) => {
-    signedIn();
-    const file = backup.files.find((f) => f.info.id === id) ?? fail("Backup not found.");
+  restore_backup: async ({ id, password, folder }: Args) => {
+    const nowhereYet = !backup.backupFolder && !backup.signedIn;
+    const { files, dir } = placeFiles(folder);
+    const file = files.find((f) => f.info.id === id) ?? fail("Backup not found.");
     if (file.password !== null) {
       if (password == null && file.password !== backup.password) fail(BACKUP_PASSWORD_NEEDED);
       if (password != null && password !== file.password) fail("Wrong password.");
@@ -542,6 +584,8 @@ Object.assign(handlers, {
     await wait(600);
     db = JSON.parse(file.data);
     backup.busy = null;
+    // A new computer restoring from a folder keeps backing up there.
+    if (nowhereYet && dir) backup.backupFolder = dir;
     const info = file.info;
     return { noteCount: info.noteCount, folderCount: db.folders.length, backupCreatedAt: info.createdAt, safetyCopy: "(browser mock)" };
   },

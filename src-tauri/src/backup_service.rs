@@ -1,4 +1,7 @@
-//! Google Drive backup & restore, built on `tuxnotes-core::backup` and `tuxnotes-gdrive`.
+//! Backup & restore to a folder (USB drive, Nextcloud, Dropbox, Syncthing: see
+//! `backup_folder`) or to Google Drive, built on `tuxnotes-core::backup` and `tuxnotes-gdrive`.
+//! Backups go to one place at a time: the chosen folder, otherwise Google Drive when
+//! signed in.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -18,8 +21,10 @@ use tuxnotes_gdrive::{DriveClient, LoopbackReceiver, OAuthClient, Pkce, Tokens, 
 use zeroize::Zeroizing;
 
 use crate::AppState;
+use crate::backup_folder::{self, FolderBackup};
 use crate::credentials::{BACKUP_KEY_ACCOUNT, TokenVault};
 use crate::google_client::{self, ClientSource};
+use crate::identity;
 use crate::settings::{AutoBackup, BackupEncryption, Settings, SettingsStore};
 
 /// Event carrying the Google sign-in URL, so the UI can offer "Copy link"
@@ -38,6 +43,17 @@ const MAX_DOWNLOAD_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 pub const PASSWORD_NEEDED: &str = "BACKUP_PASSWORD_NEEDED";
 
 pub type CmdResult<T> = Result<T, String>;
+
+const BUSY_MESSAGE: &str =
+    "Another backup operation is already running. Please wait for it to finish.";
+
+/// Where backups go.
+#[derive(Debug, Clone, PartialEq)]
+enum Place {
+    Folder(PathBuf),
+    Drive,
+    Nowhere,
+}
 
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
@@ -65,6 +81,10 @@ pub struct BackupStatus {
     /// New backups are encrypted with a password.
     pub encrypted: bool,
     pub backup_on_close: bool,
+    /// Backups go to this folder (instead of Google Drive).
+    pub backup_folder: Option<String>,
+    /// The folder is there now (a USB drive may be unplugged).
+    pub folder_available: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -117,6 +137,9 @@ pub struct BackupService {
     busy: Mutex<Option<Busy>>,
     cancel_sign_in: Mutex<Option<oneshot::Sender<()>>>,
     folder_id: AsyncMutex<Option<String>>,
+    /// The folder backups go in inside a chosen folder: "TuxNotes Backups" (or
+    /// "TuxNotes Dev Backups", so test builds keep theirs apart).
+    folder_name: String,
 }
 
 /// Clears the busy flag when an operation ends, however it ends.
@@ -145,6 +168,7 @@ impl BackupService {
             .build()
             .expect("HTTP client");
         let vault = TokenVault::new(app_id, data_dir.join("google-token"));
+        let folder_name = format!("{} Backups", identity::display_name(app_id));
         let signed_in = vault.load().is_some();
         Self {
             http,
@@ -169,7 +193,16 @@ impl BackupService {
             busy: Mutex::new(None),
             cancel_sign_in: Mutex::new(None),
             folder_id: AsyncMutex::new(None),
+            folder_name,
         }
+    }
+
+    fn place(&self, s: &Settings) -> Place {
+        place_for(s, *self.signed_in.lock().unwrap())
+    }
+
+    fn place_ready(&self, s: &Settings) -> bool {
+        self.place(s).ready()
     }
 
     fn drive(&self) -> DriveClient {
@@ -177,9 +210,10 @@ impl BackupService {
     }
 
     fn begin(&self, kind: Busy) -> CmdResult<(tokio::sync::MutexGuard<'_, ()>, BusyGuard<'_>)> {
-        let lock = self.operation.try_lock().map_err(|_| {
-            "Another backup operation is already running. Please wait for it to finish.".to_string()
-        })?;
+        let lock = self
+            .operation
+            .try_lock()
+            .map_err(|_| BUSY_MESSAGE.to_string())?;
         *self.busy.lock().unwrap() = Some(kind);
         Ok((lock, BusyGuard(&self.busy)))
     }
@@ -203,7 +237,41 @@ impl BackupService {
             last_backup_error: s.last_backup_error.clone(),
             encrypted: s.backup_encryption.is_some(),
             backup_on_close: s.backup_on_close,
+            folder_available: s
+                .backup_folder
+                .as_deref()
+                .is_some_and(|dir| Path::new(dir).is_dir()),
+            backup_folder: s.backup_folder,
         }
+    }
+
+    /// Back up to a folder (the "TuxNotes Backups" folder inside `picked` is created),
+    /// or with `None` stop backing up to a folder.
+    pub async fn set_backup_folder(&self, picked: Option<String>) -> CmdResult<BackupStatus> {
+        let _lock = self
+            .operation
+            .try_lock()
+            .map_err(|_| BUSY_MESSAGE.to_string())?;
+        let dir = match picked {
+            None => None,
+            Some(picked) => {
+                let name = self.folder_name.clone();
+                let dir = tauri::async_runtime::spawn_blocking(move || {
+                    backup_folder::prepare(Path::new(&picked), &name)
+                })
+                .await
+                .map_err(err)??;
+                Some(dir.to_string_lossy().into_owned())
+            }
+        };
+        // A new place: its first backup isn't made yet.
+        self.settings.update(|s| {
+            s.backup_folder = dir;
+            s.last_backup_at = None;
+            s.last_backup_error = None;
+        });
+        self.auto_backup_finished(true, 0);
+        Ok(self.status())
     }
 
     pub fn set_preferences(
@@ -259,11 +327,12 @@ impl BackupService {
         *self.change_baseline.lock().unwrap() = changes;
     }
 
-    /// Whether closing TuxNotes should make a backup first: the setting is on, Google
-    /// Drive is connected, and something changed since the last backup (or it failed).
+    /// Whether closing TuxNotes should make a backup first: the setting is on, the backup
+    /// folder is there or Google Drive is connected, and something changed since the last
+    /// backup (or it failed).
     pub fn backup_needed_on_close(&self, store: &Store) -> bool {
         let s = self.settings.get();
-        if !s.backup_on_close || !*self.signed_in.lock().unwrap() {
+        if !s.backup_on_close || !self.place_ready(&s) {
             return false;
         }
         self.has_new_changes(store, &s) || s.last_backup_error.is_some()
@@ -299,17 +368,17 @@ impl BackupService {
         self.backup_now(app).await.map(|_| true)
     }
 
-    /// True when an automatic backup should run now.
-    /// True when an automatic backup should run now: automatic backups are on, Google
-    /// Drive is connected and idle, the interval has passed, something changed since the
-    /// last backup (unchanged copies would push older, different ones out), and after a
-    /// failure the wait before trying again is over.
+    /// True when an automatic backup should run now: automatic backups are on, the backup
+    /// folder is there (or Google Drive is connected), nothing else is running, the
+    /// interval has passed, something changed since the last backup (unchanged copies
+    /// would push older, different ones out), and after a failure the wait before trying
+    /// again is over.
     pub fn auto_backup_due(&self, store: &Store, now_ms: i64) -> bool {
         let s = self.settings.get();
         let Some(interval) = s.auto_backup.interval_ms() else {
             return false;
         };
-        *self.signed_in.lock().unwrap()
+        self.place_ready(&s)
             && self.busy.lock().unwrap().is_none()
             && now_ms >= *self.auto_retry_at.lock().unwrap()
             && s.last_backup_at
@@ -512,6 +581,13 @@ impl BackupService {
     }
 
     async fn run_backup(&self, app: &AppHandle) -> CmdResult<BackupInfo> {
+        // Before the work of making the backup: is there somewhere to put it?
+        let place = self.place(&self.settings.get());
+        match &place {
+            Place::Folder(dir) if !dir.is_dir() => return Err(backup_folder::missing_message(dir)),
+            Place::Nowhere => return Err("Choose where to back up first.".into()),
+            _ => {}
+        }
         let tmp = self.tmp_dir()?;
         let archive = tmp.join(backup::backup_file_name(now_ms()));
         let sealed = archive.with_extension("zip.enc");
@@ -572,6 +648,35 @@ impl BackupService {
         };
         let size = fs::metadata(&upload).map_err(err)?.len();
         let name = upload.file_name().unwrap().to_string_lossy().into_owned();
+
+        if let Place::Folder(dir) = place {
+            let keep = self.settings.get().keep_backups as usize;
+            let (src, file_name) = (upload.clone(), name.clone());
+            tauri::async_runtime::spawn_blocking(move || {
+                backup_folder::save(&src, &dir, &file_name)?;
+                log::info!(
+                    "saved backup {file_name} ({size} bytes) in {}",
+                    dir.display()
+                );
+                if let Err(e) = backup_folder::prune(&dir, keep) {
+                    log::warn!("could not remove old backups: {e}");
+                }
+                Ok::<_, String>(())
+            })
+            .await
+            .map_err(err)??;
+            self.set_change_baseline(changes);
+            return Ok(BackupInfo {
+                id: name.clone(),
+                name,
+                created_at: Some(manifest.created_at),
+                size: Some(size),
+                note_count: Some(manifest.note_count),
+                app_version: Some(manifest.app_version),
+                encrypted: encryption.is_some(),
+                needs_password: false,
+            });
+        }
 
         let mut props = BTreeMap::from([
             (APP_TAG_KEY.to_string(), APP_TAG_VALUE.to_string()),
@@ -647,11 +752,38 @@ impl BackupService {
         Ok(())
     }
 
-    pub async fn list_backups(&self) -> CmdResult<Vec<BackupInfo>> {
+    /// The backups in the backup place, or in the folder `picked` (to restore from).
+    pub async fn list_backups(&self, picked: Option<String>) -> CmdResult<Vec<BackupInfo>> {
+        if let Some(dir) = self.folder_to_read(picked)? {
+            let local_salt = self.settings.get().backup_encryption.map(|e| e.salt);
+            let found = tauri::async_runtime::spawn_blocking(move || backup_folder::list(&dir))
+                .await
+                .map_err(err)??;
+            return Ok(found
+                .into_iter()
+                .map(|b| folder_backup_info(b, local_salt.as_deref()))
+                .collect());
+        }
         let folder = self.backup_folder().await?;
         let mut list = self.list_in(&folder).await?;
         list.sort_by_key(|b| std::cmp::Reverse(b.created_at.unwrap_or(0)));
         Ok(list)
+    }
+
+    /// The folder to list or restore from: the one picked, else the backup folder.
+    /// `None` means Google Drive.
+    fn folder_to_read(&self, picked: Option<String>) -> CmdResult<Option<PathBuf>> {
+        if let Some(picked) = picked {
+            return Ok(Some(backup_folder::backups_dir_in(
+                Path::new(&picked),
+                &self.folder_name,
+            )));
+        }
+        match self.place(&self.settings.get()) {
+            Place::Folder(dir) => Ok(Some(dir)),
+            Place::Drive => Ok(None),
+            Place::Nowhere => Err("Choose where your backups are first.".into()),
+        }
     }
 
     async fn list_in(&self, folder: &str) -> CmdResult<Vec<BackupInfo>> {
@@ -692,25 +824,20 @@ impl BackupService {
 
     // ------------------------------------------------------------------ restore
 
-    /// Restore a backup. Encrypted backups are opened with `password`, or without one
-    /// when this computer has the key for them; otherwise this fails with [`PASSWORD_NEEDED`].
+    /// Restore a backup from the backup place, or from the folder `picked`. Encrypted
+    /// backups are opened with `password`, or without one when this computer has the key
+    /// for them; otherwise this fails with [`PASSWORD_NEEDED`]. Restoring from a folder
+    /// while no backup place is chosen yet (a new computer) makes it the backup folder.
     pub async fn restore(
         &self,
         app: &AppHandle,
         file_id: &str,
         password: Option<String>,
+        picked: Option<String>,
     ) -> CmdResult<RestoreResult> {
         let (_lock, _busy) = self.begin(Busy::Restoring)?;
-        // What TuxNotes recorded about this backup when uploading it (Drive keeps these
-        // properties private to TuxNotes). An encrypted backup must still be encrypted.
-        let folder = self.backup_folder().await?;
-        let expect_encrypted = self
-            .list_in(&folder)
-            .await?
-            .into_iter()
-            .find(|b| b.id == file_id)
-            .ok_or("This backup wasn't found in the TuxNotes Backups folder.")?
-            .encrypted;
+        let nowhere_yet = self.place(&self.settings.get()) == Place::Nowhere;
+        let from_folder = self.folder_to_read(picked.clone())?;
         let tmp = self.tmp_dir()?;
         let stamp = now_ms();
         let download = tmp.join(format!("restore-{stamp}.download"));
@@ -724,16 +851,19 @@ impl BackupService {
         ];
         cleanup.extend(backup::db_with_sidecars(&staged_db));
         let _cleanup = RemoveOnDrop(cleanup);
-        let drive = self.drive();
-        self.with_token(|t| {
-            let (drive, id, dest) = (drive.clone(), file_id.to_string(), download.clone());
-            async move {
-                drive
-                    .download_to_file(&t, &id, &dest, MAX_DOWNLOAD_BYTES)
-                    .await
+        // An encrypted backup must still be encrypted: on Google Drive TuxNotes recorded it
+        // (in properties only TuxNotes sees); in a folder its name ends in .enc.
+        let expect_encrypted = match &from_folder {
+            Some(dir) => {
+                let (dir, name, dest) = (dir.clone(), file_id.to_string(), download.clone());
+                tauri::async_runtime::spawn_blocking(move || {
+                    backup_folder::fetch(&dir, &name, &dest)
+                })
+                .await
+                .map_err(err)??
             }
-        })
-        .await?;
+            None => self.download_from_drive(file_id, &download).await?,
+        };
 
         // Decrypt first (if needed), before touching anything.
         let password = password.map(Zeroizing::new);
@@ -815,6 +945,24 @@ impl BackupService {
         // The notes now match a backup: nothing new to back up.
         self.set_change_baseline(changes);
 
+        // A new computer restoring from its backup folder: keep backing up there.
+        if nowhere_yet && let (Some(picked), Some(dir)) = (picked, &from_folder) {
+            let name = self.folder_name.clone();
+            let ready = tauri::async_runtime::spawn_blocking(move || {
+                backup_folder::prepare(Path::new(&picked), &name)
+            })
+            .await
+            .map_err(err)?;
+            match ready {
+                Ok(ready) if ready == *dir => {
+                    let dir = dir.to_string_lossy().into_owned();
+                    self.settings.update(|s| s.backup_folder = Some(dir));
+                }
+                Ok(_) => {}
+                Err(e) => log::info!("not backing up to the restored-from folder: {e}"),
+            }
+        }
+
         if let Some(key) = adopt {
             let vault = self.key_vault.clone();
             let encryption = encryption_settings(&key);
@@ -833,6 +981,29 @@ impl BackupService {
         Ok(result)
     }
 
+    /// Download a backup from Google Drive. Returns whether it must be encrypted.
+    async fn download_from_drive(&self, file_id: &str, dest: &Path) -> CmdResult<bool> {
+        let folder = self.backup_folder().await?;
+        let expect_encrypted = self
+            .list_in(&folder)
+            .await?
+            .into_iter()
+            .find(|b| b.id == file_id)
+            .ok_or("This backup wasn't found in the TuxNotes Backups folder.")?
+            .encrypted;
+        let drive = self.drive();
+        self.with_token(|t| {
+            let (drive, id, dest) = (drive.clone(), file_id.to_string(), dest.to_path_buf());
+            async move {
+                drive
+                    .download_to_file(&t, &id, &dest, MAX_DOWNLOAD_BYTES)
+                    .await
+            }
+        })
+        .await?;
+        Ok(expect_encrypted)
+    }
+
     fn tmp_dir(&self) -> CmdResult<PathBuf> {
         let dir = self.data_dir.join("tmp");
         fs::create_dir_all(&dir).map_err(err)?;
@@ -842,6 +1013,43 @@ impl BackupService {
     /// Remove leftovers from interrupted operations (called at startup).
     pub fn clean_tmp(&self) {
         let _ = fs::remove_dir_all(self.data_dir.join("tmp"));
+    }
+}
+
+/// Where backups go: the chosen folder, else Google Drive when signed in.
+fn place_for(s: &Settings, signed_in: bool) -> Place {
+    match &s.backup_folder {
+        Some(dir) => Place::Folder(PathBuf::from(dir)),
+        None if signed_in => Place::Drive,
+        None => Place::Nowhere,
+    }
+}
+
+impl Place {
+    /// Backups can be made now: a place is chosen, and a folder is there (not on a USB
+    /// drive that's unplugged: automatic backups wait for it instead of failing).
+    fn ready(&self) -> bool {
+        match self {
+            Place::Folder(dir) => dir.is_dir(),
+            Place::Drive => true,
+            Place::Nowhere => false,
+        }
+    }
+}
+
+/// A backup in a folder as the list shows it. Encrypted ones need their password unless
+/// they were made with this computer's backup password.
+fn folder_backup_info(b: FolderBackup, local_salt: Option<&str>) -> BackupInfo {
+    BackupInfo {
+        needs_password: b.encrypted
+            && (local_salt.is_none() || b.key_salt.as_deref() != local_salt),
+        encrypted: b.encrypted,
+        created_at: Some(b.created_at),
+        size: Some(b.size),
+        note_count: b.note_count,
+        app_version: b.app_version,
+        id: b.name.clone(),
+        name: b.name,
     }
 }
 
@@ -1018,6 +1226,63 @@ mod tests {
         );
         assert!(new_changes(5, 5, t, None), "never backed up");
         assert!(!new_changes(0, 0, None, None), "no notes at all");
+    }
+
+    #[test]
+    fn backs_up_to_the_folder_first_then_google_drive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut s = Settings::default();
+        assert_eq!(place_for(&s, false), Place::Nowhere);
+        assert!(
+            !place_for(&s, false).ready(),
+            "nowhere chosen: no automatic backups"
+        );
+        assert_eq!(place_for(&s, true), Place::Drive);
+        s.backup_folder = Some(tmp.path().display().to_string());
+        assert_eq!(
+            place_for(&s, true),
+            Place::Folder(tmp.path().to_path_buf()),
+            "the folder wins"
+        );
+        assert!(place_for(&s, false).ready());
+        // A USB drive that's unplugged: wait (not ready), don't fail.
+        s.backup_folder = Some(tmp.path().join("unplugged").display().to_string());
+        assert!(!place_for(&s, true).ready());
+    }
+
+    #[test]
+    fn folder_backups_need_their_password_only_when_made_elsewhere() {
+        let item = |encrypted: bool, salt: Option<&str>| FolderBackup {
+            name: "tuxnotes-backup-20261119-140533.zip".into(),
+            created_at: 1,
+            size: 10,
+            note_count: (!encrypted).then_some(3),
+            app_version: None,
+            encrypted,
+            key_salt: salt.map(String::from),
+        };
+        let info = folder_backup_info(item(false, None), Some("aa"));
+        assert!(!info.encrypted && !info.needs_password);
+        assert_eq!(
+            (info.id.as_str(), info.note_count),
+            ("tuxnotes-backup-20261119-140533.zip", Some(3))
+        );
+        assert!(
+            !folder_backup_info(item(true, Some("aa")), Some("aa")).needs_password,
+            "this computer's password"
+        );
+        assert!(
+            folder_backup_info(item(true, Some("bb")), Some("aa")).needs_password,
+            "another password"
+        );
+        assert!(
+            folder_backup_info(item(true, Some("aa")), None).needs_password,
+            "not encrypting here"
+        );
+        assert!(
+            folder_backup_info(item(true, None), Some("aa")).needs_password,
+            "damaged header"
+        );
     }
 
     #[test]

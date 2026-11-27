@@ -1,4 +1,5 @@
 mod attachments;
+mod backup_folder;
 mod backup_service;
 mod commands;
 mod credentials;
@@ -165,6 +166,8 @@ pub fn run() {
             commands::backup_now,
             commands::list_backups,
             commands::restore_backup,
+            commands::set_backup_folder,
+            commands::pick_backup_folder,
             commands::app_info,
             files::take_pending_files,
             files::read_text_file,

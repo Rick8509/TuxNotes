@@ -216,9 +216,13 @@ pub async fn backup_now(
     state.backup.backup_now(&app).await
 }
 
+/// The backups in the backup place, or in `folder` (to restore from).
 #[tauri::command]
-pub async fn list_backups(state: State<'_, AppState>) -> CmdResult<Vec<BackupInfo>> {
-    state.backup.list_backups().await
+pub async fn list_backups(
+    state: State<'_, AppState>,
+    folder: Option<String>,
+) -> CmdResult<Vec<BackupInfo>> {
+    state.backup.list_backups(folder).await
 }
 
 #[tauri::command]
@@ -227,8 +231,56 @@ pub async fn restore_backup(
     state: State<'_, AppState>,
     id: String,
     password: Option<String>,
+    folder: Option<String>,
 ) -> CmdResult<RestoreResult> {
-    state.backup.restore(&app, &id, password).await
+    state.backup.restore(&app, &id, password, folder).await
+}
+
+/// Back up to a folder (`None`: stop backing up to a folder).
+#[tauri::command]
+pub async fn set_backup_folder(
+    state: State<'_, AppState>,
+    folder: Option<String>,
+) -> CmdResult<BackupStatus> {
+    state.backup.set_backup_folder(folder).await
+}
+
+/// Choose a folder to back up to (`purpose` "backup") or to restore from ("restore").
+/// None when cancelled.
+#[tauri::command]
+pub async fn pick_backup_folder(
+    window: tauri::Window,
+    state: State<'_, AppState>,
+    purpose: String,
+) -> CmdResult<Option<String>> {
+    use tauri_plugin_dialog::DialogExt;
+    let title = if purpose == "restore" {
+        "Choose the Folder with Your Backups"
+    } else {
+        "Choose a Folder for Backups"
+    };
+    // Start next to the current backup folder (e.g. on the USB drive), else at home.
+    let start = state
+        .backup
+        .status()
+        .backup_folder
+        .map(std::path::PathBuf::from)
+        .and_then(|dir| dir.parent().map(|p| p.to_path_buf()))
+        .filter(|dir| dir.is_dir())
+        .or_else(|| std::env::var_os("HOME").map(std::path::PathBuf::from));
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let mut dialog = window.dialog().file().set_title(title).set_parent(&window);
+    if let Some(start) = start {
+        dialog = dialog.set_directory(start);
+    }
+    dialog.pick_folder(move |folder| {
+        let _ = tx.send(folder);
+    });
+    let Some(folder) = rx.await.map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    let path = folder.into_path().map_err(|e| e.to_string())?;
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 
 // ------------------------------------------------------------------ about

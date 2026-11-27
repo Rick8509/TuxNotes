@@ -27,6 +27,12 @@ const click = async (sel, t) => {
   await sleep(250);
 };
 const confirm = (label) => click('[role="alertdialog"] .btn', label);
+/** Until the backup or restore that's running has finished. */
+const idle = async () => {
+  await sleep(150);
+  await page.waitForFunction(() => !/Backing up your notes|Restoring your notes/.test(document.querySelector(".panel")?.textContent ?? ""), { timeout: 10_000 });
+  await sleep(150);
+};
 const pick = (path) => page.evaluate((path) => (globalThis.__mockPickFolder = path), path);
 const openBackup = async () => {
   if (await page.$('[role="dialog"][aria-label="Settings"]')) { await page.keyboard.press("Escape"); await sleep(200); }
@@ -47,7 +53,7 @@ check("Backup offers a folder", p.includes("Back Up to a Folder…") && p.includ
 check("…and nothing about Google when this copy has no Google sign-in", !p.includes("Google"), p);
 
 // Choose a folder: the first backup is made right away
-await click(".panel .btn", "Back Up to a Folder…"); await sleep(1200);
+await click(".panel .btn", "Back Up to a Folder…"); await idle();
 check("the first backup is made at once", (await toast()).includes("Backed up 1 note to the backup folder. TuxNotes will also back up daily from now on."), await toast());
 await dismissToasts();
 p = await panel();
@@ -59,14 +65,14 @@ check("…and the usual choices, worded for a folder", p.includes("Keep in the f
 await page.keyboard.press("Escape"); await sleep(200);
 await newNote("Second note");
 await openBackup();
-await click(".panel .btn", "Back Up Now"); await sleep(1100);
+await click(".panel .btn", "Back Up Now"); await idle();
 check("Back Up Now saves another", (await toast()) === "Backed up 2 notes to the backup folder", await toast());
 await dismissToasts();
 await click(".panel .btn", "Restore…"); await sleep(600);
 check("Restore… lists the folder's backups, newest first", (await text("#backup-title")) === "Restore from a Folder" && (await backups()).length === 2 && (await backups())[0].includes("Latest") && (await backups())[0].includes("2 notes"), JSON.stringify(await backups()));
 await page.keyboard.press("Escape"); await sleep(200);
 await page.select(".panel .prefs label:nth-of-type(2) select", "5"); await sleep(200);
-for (let i = 0; i < 5; i++) { await click(".panel .btn", "Back Up Now"); await sleep(1000); }
+for (let i = 0; i < 5; i++) { await click(".panel .btn", "Back Up Now"); await idle(); }
 await dismissToasts();
 await click(".panel .btn", "Restore…"); await sleep(600);
 check("only the last 5 are kept", (await backups()).length === 5, String((await backups()).length));
@@ -93,7 +99,7 @@ await click(".panel .link", "Change…"); await sleep(300);
 check("a folder TuxNotes can't write to is refused with the reason", (await toast()).includes("it's read-only") && (await text(".panel .card .email")) === "Nextcloud", await toast());
 await dismissToasts();
 await pick("/media/you/USB");
-await click(".panel .link", "Change…"); await sleep(1200);
+await click(".panel .link", "Change…"); await idle();
 check("changing the folder backs up there at once", (await text(".panel .card .email")) === "USB" && (await text(".panel .card .path")) === "/media/you/USB/TuxNotes Backups" && (await toast()).includes("Backed up 2 notes"), await toast());
 await dismissToasts();
 
@@ -110,7 +116,7 @@ const list = await backups();
 check("Restore from a folder finds the backups inside the chosen folder", (await text("#backup-title")) === "Restore from a Folder" && list.length === 5, JSON.stringify(list));
 await page.evaluate(() => [...document.querySelectorAll(".panel .backup input")].at(-1).click()); await sleep(100);
 await click(".panel .actions .btn", "Restore");
-await confirm("Restore"); await sleep(1300);
+await confirm("Restore"); await idle();
 check("restoring there also keeps backing up there", (await toast()) === "Restored 2 notes. New backups will be saved in the same folder.", await toast());
 await openBackup();
 check("…so Backup shows that folder", (await text(".panel .card .email")) === "Nextcloud", await panel());
@@ -130,7 +136,7 @@ await page.type('.pw-form input[aria-label="Backup password"]', "correct horse")
 await page.type('.pw-form input[aria-label="Verify backup password"]', "correct horse");
 await click(".pw-form .btn", "Encrypt Backups"); await sleep(300);
 await dismissToasts();
-await click(".panel .btn", "Back Up Now"); await sleep(1100);
+await click(".panel .btn", "Back Up Now"); await idle();
 await click(".panel .btn", "Restore…"); await sleep(600);
 check("encrypted backups are marked and don't show what they hold", (await backups())[0].includes("Encrypted") && !(await backups())[0].includes("notes"), JSON.stringify(await backups()));
 await page.keyboard.press("Escape"); await sleep(200);

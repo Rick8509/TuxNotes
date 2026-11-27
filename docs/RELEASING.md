@@ -41,7 +41,7 @@ Versions are always `X.Y.Z`. Pre-release versions like `1.0.0-beta.1` aren't use
 
 TuxNotes Dev is a separate app: it installs **next to** TuxNotes (`sudo apt install ./TuxNotes*Dev_*.deb`), shows a DEV badge and an orange DEV icon, and keeps its own notes, settings and keyring entries. So you can try new features without risking your real notes. Each dev build has a higher version (`-dev.<commits>`) and installs over the previous one; remove it with `sudo apt remove tux-notes-dev`.
 
-On your computer, `npm run build:dev` builds the same packages and `npm run app:dev` runs TuxNotes Dev straight from the code (see the README).
+On your computer, `npm run build:dev` builds the same packages and `npm run app:dev` runs TuxNotes Dev straight from the code (see [CONTRIBUTING.md](../CONTRIBUTING.md)).
 
 ## Before you release
 

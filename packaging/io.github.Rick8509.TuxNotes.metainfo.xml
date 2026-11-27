@@ -101,6 +101,9 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.2.0" date="2026-11-27">
+      <url type="details">https://github.com/Rick8509/TuxNotes/releases/tag/v0.2.0</url>
+    </release>
     <release version="0.1.0" date="2026-11-23">
       <url type="details">https://github.com/Rick8509/TuxNotes/releases/tag/v0.1.0</url>
     </release>

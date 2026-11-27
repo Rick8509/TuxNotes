@@ -4,6 +4,8 @@ All notable changes to TuxNotes are listed here.
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-27
+
 Back up to a USB drive or a synced folder without any account, find anything with the new command palette, insert things with slash commands, and open text, code and Markdown files in the new Files window. Plus spell checking, code blocks in colour, image editing and a notice when a new version is out.
 
 ### Backup

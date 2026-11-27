@@ -5,15 +5,16 @@ name: Build and Publish
 # record of the build, tags the version and publishes the GitHub Release with the
 # changelog notes. Nothing is published unless every step before it succeeded.
 #
-# Test run: Actions → "Build and Publish" → Run workflow (from dev) builds the packages without
-# publishing anything; they're attached to the run as "packages".
+# Dev build: Actions → "Build and Publish" → Run workflow (from dev) builds TuxNotes Dev
+# (its own app, installed next to TuxNotes with its own notes) without publishing
+# anything; the packages are attached to the run.
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: "Test run: build the packages but don't publish anything"
+      dev_build:
+        description: "Dev build: build TuxNotes Dev to try (installs next to TuxNotes, with its own notes); nothing is published. Untick only to publish a release from main."
         type: boolean
         default: true
 
@@ -40,10 +41,10 @@ jobs:
       - name: Check that every file has the same version and the changelog has its notes
         id: check
         env:
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          DEV_BUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.dev_build }}
         run: |
-          if [ "$DRY_RUN" = "true" ]; then
-            # Test runs happen before a release is prepared: only the versions must agree.
+          if [ "$DEV_BUILD" = "true" ]; then
+            # Dev builds happen before a release is prepared: only the versions must agree.
             node scripts/release.mjs check
           else
             node scripts/release.mjs check "$(node scripts/release.mjs current)"
@@ -52,16 +53,16 @@ jobs:
         id: decide
         env:
           VERSION: ${{ steps.check.outputs.version }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          DEV_BUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.dev_build }}
         run: |
-          if [ "$DRY_RUN" = "true" ]; then
-            echo "Test run: building $VERSION without publishing." | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$DEV_BUILD" = "true" ]; then
+            echo "Dev build: building TuxNotes Dev from $GITHUB_REF_NAME, nothing is published." | tee -a "$GITHUB_STEP_SUMMARY"
             echo "build=true" >> "$GITHUB_OUTPUT"; echo "publish=false" >> "$GITHUB_OUTPUT"
           elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
             echo "v$VERSION is already released; nothing to publish." | tee -a "$GITHUB_STEP_SUMMARY"
             echo "build=false" >> "$GITHUB_OUTPUT"; echo "publish=false" >> "$GITHUB_OUTPUT"
           elif [ "$GITHUB_REF_NAME" != "main" ]; then
-            echo "::error::Releases are published from main only. Use a test run on other branches."
+            echo "::error::Releases are published from main only. Tick \"Dev build\" to build TuxNotes Dev from other branches."
             exit 1
           else
             echo "Publishing v$VERSION." | tee -a "$GITHUB_STEP_SUMMARY"
@@ -74,8 +75,13 @@ jobs:
     if: needs.plan.outputs.build == 'true'
     # The oldest supported Ubuntu, so the packages run on as many distributions as possible.
     runs-on: ubuntu-22.04
+    env:
+      DEV_BUILD: ${{ needs.plan.outputs.publish != 'true' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Dev versions count the commits (0.1.0-dev.84).
+          fetch-depth: 0
       - name: Install system libraries
         run: |
           sudo apt-get update
@@ -89,15 +95,25 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Build .deb, .rpm and AppImage
+        id: build
         env:
           # Google sign-in for Drive backup is built in once these repository secrets
           # exist (docs/google-setup.md); without them the packages simply don't offer it.
           TUXNOTES_GOOGLE_CLIENT_ID: ${{ secrets.TUXNOTES_GOOGLE_CLIENT_ID }}
           TUXNOTES_GOOGLE_CLIENT_SECRET: ${{ secrets.TUXNOTES_GOOGLE_CLIENT_SECRET }}
-        run: npx tauri build
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          if [ "$DEV_BUILD" = "true" ]; then
+            node scripts/dev-app.mjs build   # writes version=0.1.0-dev.N to the step output
+            echo "artifact=TuxNotes-Dev-$(node -p "require('./target/tuxnotes-dev.conf.json').version")" >> "$GITHUB_OUTPUT"
+          else
+            npx tauri build
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "artifact=packages" >> "$GITHUB_OUTPUT"
+          fi
       - name: Collect the packages and check them
         env:
-          VERSION: ${{ needs.plan.outputs.version }}
+          VERSION: ${{ steps.build.outputs.version }}
         run: |
           mkdir packages
           cp target/release/bundle/deb/*.deb target/release/bundle/rpm/*.rpm \
@@ -111,14 +127,25 @@ jobs:
           if [ "$deb_version" != "$VERSION" ]; then
             echo "::error::The .deb says version $deb_version, expected $VERSION"; exit 1
           fi
-          dpkg-deb -c *.deb | grep -q 'usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml' \
-            || { echo "::error::The .deb is missing the AppStream file"; exit 1; }
+          if [ "$DEV_BUILD" = "true" ]; then
+            [ "$(dpkg-deb -f *.deb Package)" = "tux-notes-dev" ] \
+              || { echo "::error::The dev .deb should be the tux-notes-dev package"; exit 1; }
+          else
+            dpkg-deb -c *.deb | grep -q 'usr/share/metainfo/io.github.Rick8509.TuxNotes.metainfo.xml' \
+              || { echo "::error::The .deb is missing the AppStream file"; exit 1; }
+          fi
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
           ls -la
+          if [ "$DEV_BUILD" = "true" ]; then
+            {
+              echo "### TuxNotes Dev $VERSION is ready"
+              echo "Download **${{ steps.build.outputs.artifact }}** under *Artifacts* below (kept 14 days), unzip it and install the \`.deb\` with \`sudo apt install ./TuxNotes*Dev_*.deb\`. It installs next to TuxNotes, with its own notes."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: packages
+          name: ${{ steps.build.outputs.artifact }}
           path: packages/
           retention-days: 14
           if-no-files-found: error

@@ -5,9 +5,13 @@
   import { app } from "./lib/stores/app.svelte";
   import { ui } from "./lib/stores/ui.svelte";
   import { printNote } from "./lib/importExport";
+  import CommandPalette from "./lib/components/CommandPalette.svelte";
   import ConfirmDialog from "./lib/components/ConfirmDialog.svelte";
   import LockDialog from "./lib/components/LockDialog.svelte";
   import { prefs } from "./lib/stores/prefs.svelte";
+  import { identity } from "./lib/stores/identity.svelte";
+  import { spelling } from "./lib/stores/spelling.svelte";
+  import { updates } from "./lib/stores/updates.svelte";
   import Editor from "./lib/components/Editor.svelte";
   import NoteList from "./lib/components/NoteList.svelte";
   import NoteInfoDialog from "./lib/components/NoteInfoDialog.svelte";
@@ -17,7 +21,22 @@
   /** How long closing waits for a backup before quitting anyway. */
   const CLOSE_BACKUP_LIMIT_MS = 90_000;
 
+  // "TuxNotes" or "TuxNotes Dev" (the Files window sets its own title).
+  $effect(() => {
+    document.title = identity.name;
+  });
+
+  // Spell checking follows Settings → General → Spelling (at start and on every change).
+  $effect(() => {
+    void prefs.spellCheck;
+    void JSON.stringify(prefs.spellLanguages);
+    void spelling.apply();
+  });
+
   onMount(() => {
+    identity.load();
+    // "A new version is out" (Settings → General → Updates).
+    updates.start();
     void app.init();
     const cleanups: (() => void)[] = [];
 
@@ -97,7 +116,7 @@
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (app.confirmRequest || app.settingsSection || app.showNoteInfo || app.lockPrompt) return;
+    if (app.confirmRequest || app.settingsSection || app.showNoteInfo || app.lockPrompt || app.paletteOpen) return;
 
     if (e.key === "F11") {
       e.preventDefault();
@@ -136,6 +155,15 @@
     if (key === "p" && !e.shiftKey) {
       e.preventDefault();
       if (app.current) void printNote();
+    } else if (key === "p" && e.shiftKey) {
+      // The command palette: every action, folder and note in one search box.
+      e.preventDefault();
+      if (ui.sidebarOverlay) ui.closeOverlay();
+      app.paletteOpen = true;
+    } else if (key === "o" && !e.shiftKey) {
+      // Open a text or code file in the Files window.
+      e.preventDefault();
+      void api.openFileDialog().catch((err) => app.showError(err));
     } else if (e.key === ",") {
       e.preventDefault();
       app.settingsSection = "general";
@@ -186,7 +214,7 @@
     class="app"
     class:animate={!ui.resizing}
     style:grid-template-columns={ui.columns}
-    inert={!!(app.settingsSection || app.confirmRequest || app.lockPrompt || app.showNoteInfo)}
+    inert={!!(app.settingsSection || app.confirmRequest || app.lockPrompt || app.showNoteInfo || app.paletteOpen)}
   >
     <Sidebar />
     <NoteList />
@@ -198,6 +226,9 @@
     <div class="overlay-scrim" role="presentation" onmousedown={() => ui.closeOverlay()}></div>
   {/if}
 
+  {#if app.paletteOpen}
+    <CommandPalette />
+  {/if}
   {#if app.settingsSection}
     <SettingsDialog />
   {/if}

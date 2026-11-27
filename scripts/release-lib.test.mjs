@@ -33,7 +33,7 @@ describe("nextVersion", () => {
   });
 
   it("explains why pre-release versions aren't used", () => {
-    expect(() => nextVersion("0.2.0", "0.3.0-beta.1")).toThrow(/newer than 1.0.0.*test run/);
+    expect(() => nextVersion("0.2.0", "0.3.0-beta.1")).toThrow(/newer than 1.0.0.*dev build/);
     expect(() => nextVersion("0.2.0", "beta")).toThrow();
   });
 

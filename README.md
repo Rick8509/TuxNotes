@@ -1,17 +1,79 @@
+<div align="center">
+
+<img src="src-tauri/icons/128x128@2x.png" width="112" alt="TuxNotes icon">
+
 # TuxNotes
 
-[![Latest release](https://img.shields.io/github/v/release/Rick8509/TuxNotes?include_prereleases&label=release)](https://github.com/Rick8509/TuxNotes/releases/latest)
+**A fast, private notes app for Linux.**<br>
+Folders, checklists, tables, pictures and code, saved as you type on your own computer. No account needed.
+
+[![Latest release](https://img.shields.io/github/v/release/Rick8509/TuxNotes?label=release)](https://github.com/Rick8509/TuxNotes/releases/latest)
 [![Checks](https://github.com/Rick8509/TuxNotes/actions/workflows/checks.yml/badge.svg?branch=main)](https://github.com/Rick8509/TuxNotes/actions/workflows/checks.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Linux](https://img.shields.io/badge/platform-Linux-informational)
 
-**Open notes for Linux.** A lightweight, local-first notes app with a clean three-pane design inspired by Apple Notes.
+[**Download**](https://github.com/Rick8509/TuxNotes/releases/latest) · [Features](#features) · [Screenshots](#screenshots) · [Install](#install) · [Contributing](CONTRIBUTING.md)
 
-![TuxNotes with folders, a note list and a note with a table and a checklist](docs/screenshots/notes-light.png)
+</div>
 
-<p align="center">
-  <img src="docs/screenshots/checklist-dark.png" width="49%" alt="TuxNotes in the dark look, showing a packing checklist">
-  <img src="docs/screenshots/search-light.png" width="49%" alt="Searching all notes for 'lemon', with the matches highlighted in the note">
-</p>
+![TuxNotes: folders, the note list and a note with a picture and a checklist](docs/screenshots/notes-light.png)
+
+## Why TuxNotes
+
+- **Your notes stay yours.** They're kept in one file on your computer and work offline. No account, no cloud you didn't choose, no tracking.
+- **Clean and quick.** Three panes inspired by Apple Notes, a shortcut for everything, and a command palette for the rest.
+- **Safe.** Lock private notes with a password, and back up automatically to a USB drive or a synced folder, encrypted if you like.
+- **More than notes.** Open text, code and Markdown files in a tabbed editor with syntax colours.
+
+## Features
+
+### Write
+- Titles, headings, **bold**, *italic*, underline, strikethrough, quotes, links and dividers
+- Checklists that move ticked items to the bottom, plus bulleted and numbered lists
+- Tables: add and remove rows and columns, merge cells, resize columns
+- Code blocks with colours for about 35 languages and a Copy button
+- **Slash commands**: type `/` to insert a heading, checklist, table, picture, today's date and more
+- Pictures and files: paste a screenshot or drag files in; resize, crop and rotate pictures
+- Spell checking in one or more languages
+
+### Organize and find
+- Folders and subfolders (drag to nest and reorder), pinned notes, and date sections like Apple Notes
+- Recently Deleted keeps notes for 30 days, and Undo brings back a note you just deleted
+- Instant search across all notes that ignores accents, with the matches highlighted; find in the open note
+- **Command palette** (`Ctrl+Shift+P`): every action, folder and note in one search box
+
+### Private and safe
+- **Locked notes**, encrypted with your password (XChaCha20-Poly1305, Argon2id)
+- **Backups** to any folder: a USB drive, or one that Nextcloud, Dropbox or Syncthing keeps in sync. Daily or weekly, keeps the last N, optionally encrypted, and restores on any computer
+- No account and no telemetry. The only thing TuxNotes asks the internet is whether a new version is out, once a day, and you can switch that off
+
+### Files window
+- Open text and code files from your file manager (**Open With → TuxNotes**), the terminal (`tuxnotes notes.txt`) or with `Ctrl+O`
+- Tabs, syntax colours for about 140 languages, line numbers, folding and word wrap
+- Saves safely, keeps each file's encoding and line endings, and notices changes made by other programs
+- Markdown files open as a formatted page you can edit like a note; saving changes only what you edited
+
+### And also
+- Export a note as Markdown or PDF, print it, and import Markdown files
+- Light and dark look (or follow your desktop), and adjustable text size
+- Rounded, borderless window, focus mode, and it remembers its size and layout
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/notes-dark.png" alt="The dark look, with a code block in colour"><br><sub><b>Dark look</b>, with a code block in colour</sub></td>
+    <td width="50%"><img src="docs/screenshots/slash-commands.png" alt="The slash command menu in a note"><br><sub><b>Slash commands</b> insert anything at the cursor</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/command-palette.png" alt="The command palette with recent notes and actions"><br><sub><b>Command palette</b>: every action, folder and note</sub></td>
+    <td><img src="docs/screenshots/backup.png" alt="Settings, Backup, backing up to a folder"><br><sub><b>Backups</b> to a USB drive or a synced folder</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/files-code.png" alt="A Python file in the Files window"><br><sub><b>Files window</b> for text and code files</sub></td>
+    <td><img src="docs/screenshots/files-markdown.png" alt="A Markdown file shown as a formatted page"><br><sub><b>Markdown files</b> as a page you can edit</sub></td>
+  </tr>
+</table>
 
 ## Install
 
@@ -20,169 +82,89 @@ Download the file for your Linux from the **[latest release](https://github.com/
 | Your Linux | File | Install with |
 |---|---|---|
 | Ubuntu, Debian, Linux Mint, Pop!_OS, elementary OS, Zorin | `TuxNotes_<version>_amd64.deb` | `sudo apt install ./TuxNotes_*_amd64.deb` |
-| Fedora, openSUSE, RHEL, AlmaLinux, Rocky | `TuxNotes-<version>-1.x86_64.rpm` | `sudo dnf install ./TuxNotes-*.x86_64.rpm` (openSUSE: `sudo zypper install ./TuxNotes-*.x86_64.rpm`) |
-| Any other (Arch, Manjaro, …) | `TuxNotes_<version>_amd64.AppImage` | `chmod +x TuxNotes_*_amd64.AppImage` then run it |
+| Fedora, openSUSE, RHEL, AlmaLinux, Rocky | `TuxNotes-<version>-1.x86_64.rpm` | `sudo dnf install ./TuxNotes-*.x86_64.rpm` (openSUSE: `sudo zypper install …`) |
+| Any other (Arch, Manjaro, …) | `TuxNotes_<version>_amd64.AppImage` | `chmod +x TuxNotes_*.AppImage`, then run it |
 
-Run the command in the folder you downloaded to (usually `cd ~/Downloads` first). On Ubuntu and Fedora you can also double-click the file to install it with the Software app. TuxNotes then appears in your app menu.
+Run the command in the folder you downloaded to (usually `cd ~/Downloads` first), or double-click the file to install it with your Software app. TuxNotes then appears in your app menu.
 
-- **Requirements:** a 64-bit PC (x86-64) with a recent distribution: Ubuntu 22.04 or Debian 12 and newer, Fedora 38 and newer.
-- **Updating:** download the new version and install it the same way. Your notes are kept.
-- **Uninstalling:** `sudo apt remove tux-notes` or `sudo dnf remove tux-notes` (AppImage: delete the file). Your notes stay in `~/.local/share/io.github.Rick8509.TuxNotes/` until you delete that folder.
-- **Checking a download** (optional): every release lists SHA-256 checksums in `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt --ignore-missing`), and each file has a signed record that it was built from this repository by GitHub Actions (`gh attestation verify <file> --repo Rick8509/TuxNotes`).
+- **Requirements:** a 64-bit PC (x86-64) with Ubuntu 22.04, Debian 12, Fedora 38 or newer.
+- **Updating:** install the new version the same way. Your notes are kept, and TuxNotes tells you when a new version is out.
+- **Uninstalling:** `sudo apt remove tux-notes` or `sudo dnf remove tux-notes` (AppImage: delete the file). Your notes stay until you delete their folder (see [Your notes](#your-notes)).
 
-## Features
+<details>
+<summary><b>Checking a download</b> (optional)</summary>
 
-- Three panes: folders, note list and editor
-- Rich text: title, heading and subheading styles, bold, italic, underline, strikethrough, monospaced blocks, quotes
-- Checklists with round checkboxes (ticked items move to the bottom; right-click for Check All, Uncheck All, Delete Checked Items), plus bulleted and numbered lists
-- **Tables**: insert from the toolbar, right-click a cell to add or remove rows and columns, Tab between cells, drag borders to resize columns
-- **Export and import**: save a note as Markdown (attachments are copied next to it) or as a PDF, print it, and import Markdown files as notes (checklists, tables and images included). All from the **⋯** button in the editor
-- **Images and attachments**: paste a screenshot, drag in files, or use the paperclip button. Images show in the note; other files appear as chips you can open (double-click) or save a copy of. Attachments are included in backups
-- Pinned notes, folders with **subfolders** (drag folders to nest or reorder them), and **Recently Deleted** (notes are removed permanently after 30 days)
-- **Undo** right after deleting a note, **duplicate** notes, and **Note Info** (word count, dates, folder)
-- **Password-locked notes**: lock any note from its ⋯ menu; its text is encrypted until you enter the password (see [Locked notes](#locked-notes))
-- Fast full-text search that ignores accents ("cafe" finds "café"); matches are highlighted in the open note, and **Find in note** (`Ctrl+F`) steps through matches
-- **Google Drive backup and restore**: manual or automatic (daily/weekly), keeps the last N backups, and restores on any computer. TuxNotes can only see files it created. *Not in the release builds yet; see [Google Drive backup](#google-drive-backup).*
-- Rounded, borderless window. Hide the sidebar, use focus mode to hide both side panes, and drag the dividers to resize them; the window remembers its size and layout
-- Notes grouped like Apple Notes (Pinned, Today, Yesterday, Previous 7 Days, …); drag a note onto a folder to move it
-- **Settings** (`Ctrl+,`): sort notes by date edited, date created or title; date grouping on or off; how new notes start; System, Light or Dark theme; editor text size
-- Autosave, keyboard-first workflow
-- Small and fast: built with [Tauri](https://tauri.app) and stored in a single SQLite file
+Every release lists SHA-256 checksums in `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt --ignore-missing`), and each file has a signed record that GitHub built it from this repository: `gh attestation verify <file> --repo Rick8509/TuxNotes`.
+</details>
 
-### Keyboard shortcuts
+## Getting started
+
+- **`Ctrl+N`** makes a new note. Its first line is the title; everything is saved as you type.
+- **Type `/`** at the start of a line to insert a checklist, table, picture, code block or the date.
+- **`Ctrl+Shift+P`** finds any action, folder or note. **`Ctrl+Shift+F`** searches all notes.
+- **Right-click** notes, folders, pictures, checklists and table cells for what you can do with them.
+- **Settings** (`Ctrl+,`) → **Backup** → **Back Up to a Folder…** keeps a copy of your notes safe.
+
+<details>
+<summary><b>Keyboard shortcuts</b></summary>
 
 | Action | Shortcut |
 |---|---|
-| New note | `Ctrl+N` |
-| Settings | `Ctrl+,` |
-| Print the open note | `Ctrl+P` |
-| New folder | `Ctrl+Shift+N` |
+| Command palette: any action, folder or note | `Ctrl+Shift+P` |
+| Insert anything (slash commands) | `/` at the start of a line or after a space |
+| New note / new folder | `Ctrl+N` / `Ctrl+Shift+N` |
+| Search all notes | `Ctrl+Shift+F` (or `Ctrl+F` outside a note) |
 | Find in the open note | `Ctrl+F` (while typing in a note) |
-| Search all notes | `Ctrl+Shift+F` (or `Ctrl+F` elsewhere) |
-| Delete note | `Ctrl+Delete` |
-| Checklist | `Ctrl+Shift+L` |
+| Delete note | `Ctrl+Delete` (or `Delete` in the note list) |
+| Print the open note | `Ctrl+P` |
+| Settings | `Ctrl+,` |
+| Open a text or code file | `Ctrl+O` |
 | Title / Heading / Subheading / Body | `Ctrl+Shift+T` / `H` / `J` / `B` |
 | Bold / Italic / Underline / Strikethrough | `Ctrl+B` / `I` / `U` / `Ctrl+Shift+S` |
-| Show/hide sidebar | `Ctrl+Alt+S` |
-| Focus mode (hide sidebar and note list) | `Ctrl+Alt+F` |
-| Full screen | `F11` |
-| Zoom in / out | `Ctrl+=` / `Ctrl+-` |
+| Checklist | `Ctrl+Shift+L` |
+| Add or edit a link / open a link | `Ctrl+K` / `Ctrl+click` |
+| Next / previous table cell (a new row in the last cell) | `Tab` / `Shift+Tab` |
 | Open the selected note for typing (in the note list) | `Enter` or `Tab` |
-| Delete the selected note (in the note list) | `Delete` |
-| Add or edit a link | `Ctrl+K` |
-| Open a link in your browser | `Ctrl+click` |
-| Next / previous table cell (Tab in the last cell adds a row) | `Tab` / `Shift+Tab` |
+| Show or hide the sidebar / focus mode | `Ctrl+Alt+S` / `Ctrl+Alt+F` |
+| Full screen / zoom in / zoom out | `F11` / `Ctrl+=` / `Ctrl+-` |
+| Files window: save / save as / close tab / next tab | `Ctrl+S` / `Ctrl+Shift+S` / `Ctrl+W` / `Ctrl+Tab` |
+| Files window: wrap lines / Markdown as page or text | `Alt+Z` / `Ctrl+Shift+M` |
 
-## Where are my notes?
+All of them are also in **Settings → Shortcuts**.
+</details>
 
-Everything is stored locally in `~/.local/share/io.github.Rick8509.TuxNotes/`: `notes.db` (SQLite) and an `attachments/` folder for images and files. Settings live in `~/.config/io.github.Rick8509.TuxNotes/settings.json`.
+## Your notes
 
-Before a restore, TuxNotes saves a copy of your current notes in `~/.local/share/io.github.Rick8509.TuxNotes/safety/`.
+Everything is stored on your computer in `~/.local/share/io.github.Rick8509.TuxNotes/`: `notes.db` (an SQLite database) and an `attachments/` folder for pictures and files. Settings are in `~/.config/io.github.Rick8509.TuxNotes/`. Before a restore, TuxNotes keeps a copy of your current notes in the `safety/` folder there.
 
-## Locked notes
+### Locked notes
 
-Choose **Lock Note…** in a note's ⋯ menu (or right-click it in the list). The first time, you pick a password; one password covers all your locked notes.
+Choose **Lock Note…** in a note's **⋯** menu (or right-click it in the list). One password covers all locked notes, with an optional hint. A locked note's text is encrypted with XChaCha20-Poly1305, with the key protected by your password through Argon2id; neither is ever saved unencrypted. Locked notes lock again when you click the padlock, after a while without using TuxNotes (Settings → General), and when TuxNotes closes.
 
-- A locked note's text is encrypted with XChaCha20-Poly1305. The key that encrypts it is itself protected by your password through Argon2id, which makes guessing passwords slow. Neither your password nor the key is ever saved unencrypted.
-- Locked notes stay open until you click the open padlock (**Lock Now**), after a period without using TuxNotes (**Settings → General**, 10 minutes by default), or when TuxNotes closes.
-- Backups contain locked notes still encrypted, so they need the same password after a restore.
-- **There is no way to recover a forgotten password.** You can add a hint.
+Good to know: a locked note's **title** (its first line) stays visible in the list and in search, **pictures and files** in it aren't encrypted, and **a forgotten password can't be recovered**.
 
-What locking doesn't hide: the note's **title** (its first line) stays visible in the list and in search, and **images and files** in a locked note are stored unencrypted. Backups made *before* you locked a note still contain it unlocked.
+### Backups
 
-## Google Drive backup
+**Settings** (`Ctrl+,`) → **Backup** → **Back Up to a Folder…**, and choose a folder on a USB drive or one that Nextcloud, Dropbox or Syncthing keeps in sync. TuxNotes makes a **TuxNotes Backups** folder in it and backs up right away, then daily or weekly, and when you close it if anything changed. Each backup is one file with all your notes and pictures, written in full before it appears, so a sync program never picks up half a backup. While a USB drive is unplugged, backups wait for it.
 
-Open **Settings** (the gear at the bottom of the sidebar, or `Ctrl+,`) → **Backup**, then click **Back Up to Google Drive** or **Restore from Google Drive**. TuxNotes asks before opening your browser to sign in with Google; once you've allowed access, it does the backup (and turns on daily automatic backups), or shows your backups to restore.
+- **Encrypt backups** with a password (XChaCha20-Poly1305, Argon2id). TuxNotes keeps the key in your system keyring so automatic backups keep working; the password itself isn't stored, and a forgotten one can't be recovered.
+- **Restore** from the same screen. On a new computer, choose **Restore from a folder** and pick the folder with your backups.
+- **Google Drive** backups are built in too, but need Google sign-in, which the release downloads don't include yet. If you build TuxNotes yourself, see [docs/google-setup.md](docs/google-setup.md).
 
-- **Encrypt backups** (Settings → Backup): backups are encrypted on your computer before they're uploaded (XChaCha20-Poly1305, with the key derived from your password by Argon2id). TuxNotes keeps that key in your system keyring so automatic backups keep working; the password itself is never stored. Restoring on another computer asks for the password. Encrypted backups don't even show how many notes they hold. **A forgotten backup password can't be recovered.**
-- **Back up when closing** (on by default): if anything changed since the last backup, closing TuxNotes hides the window right away and finishes a backup first (for up to 90 seconds).
+## Contributing
 
-> **Not in the release builds yet.** Google sign-in needs a Google Cloud project for TuxNotes, which isn't set up yet, so the downloads from the Releases page show "Google Drive backup isn't available" in Settings → Backup. It will come in a later version. Until then, back up by copying `~/.local/share/io.github.Rick8509.TuxNotes/` while TuxNotes is closed.
+Bug reports, ideas and code are all welcome.
 
-To use Drive backup now, build TuxNotes yourself with your own (free) Google OAuth client: see [docs/google-setup.md](docs/google-setup.md).
-
-## Building from source
-
-### 1. Install the requirements (Debian/Ubuntu)
+- **Found a bug or have an idea?** [Open an issue](https://github.com/Rick8509/TuxNotes/issues/new/choose).
+- **Found a security problem?** Please report it privately: see [SECURITY.md](SECURITY.md).
+- **Want to work on the code?** [CONTRIBUTING.md](CONTRIBUTING.md) explains how to build and run TuxNotes, how the code is organized, the tests, and how releases are made.
 
 ```bash
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
-  librsvg2-dev libssl-dev libxdo-dev build-essential curl wget file
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh   # Rust 1.90 or newer
-# Node.js 20+ is also required
+git clone https://github.com/Rick8509/TuxNotes.git && cd TuxNotes
+npm install
+npm run app:dev        # runs "TuxNotes Dev", with its own notes
 ```
-
-For Fedora, Arch and other distributions, see the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/#linux).
-
-### 2. Run it in development mode
-
-```bash
-npm install            # first time only, and after dependencies change
-npm run tauri dev
-```
-
-Leave it running while you work:
-
-- Changes in `src/` (the interface) appear in the window almost instantly, with no restart.
-- Changes in `src-tauri/` or `crates/` (Rust) make it recompile and restart the app automatically (usually 5–20 s).
-
-The first build takes a few minutes; later builds are incremental.
-
-### 3. Build installable packages
-
-```bash
-npx tauri build --bundles deb    # only the .deb (fastest)
-npx tauri build                  # .deb, .rpm and AppImage
-```
-
-Packages are written to `target/release/bundle/<format>/`. To install or update your local copy:
-
-```bash
-sudo apt install ./target/release/bundle/deb/TuxNotes_*_amd64.deb
-```
-
-Rebuilding or reinstalling never touches your notes, which live in `~/.local/share/io.github.Rick8509.TuxNotes/`.
-
-### Working on the UI without Rust
-
-`npm run dev` serves the interface at http://localhost:1420 in a normal browser. A built-in mock backend stores data in `localStorage`, so no Rust toolchain is needed.
-
-## Project layout
-
-```
-crates/tuxnotes-core/   Storage engine: SQLite, migrations, search, trash, backup archives (no GUI deps)
-crates/tuxnotes-gdrive/ Google sign-in (loopback + PKCE) and Google Drive v3 client
-src-tauri/              Desktop shell: window and IPC commands that call tuxnotes-core
-src/                    Svelte 5 + TipTap user interface
-```
-
-## Development checks
-
-Run these before committing. GitHub runs the same checks (the **Checks** workflow) on every push to `dev` and `main` and on pull requests. Pull requests go to `dev`; `main` only receives releases.
-
-```bash
-cargo fmt --all                   # format Rust code
-cargo test --workspace            # storage, Drive client and app tests
-cargo clippy --workspace --all-targets -- -D warnings
-npm run check && npm test         # typecheck + frontend unit tests
-npm run test:e2e                  # browser tests (tests/e2e) against the browser preview
-```
-
-The browser tests drive the app in Google Chrome or Chromium with the mock backend (`src/lib/mock.ts`). Set `CHROME=/path/to/chrome` if it isn't found, and `npm run test:e2e -- ctrl-delete` runs only the matching test files.
-
-## Releasing
-
-Releases are published from GitHub with one click: **Actions → Prepare Release → Run workflow**, then merge the pull request it opens. The packages are built, signed and published automatically. The full playbook, including test runs and what to do when something fails, is in [docs/RELEASING.md](docs/RELEASING.md).
-
-## Roadmap
-
-- [x] Folders, notes, rich text, checklists, search, pinning, Recently Deleted
-- [x] Tables, images and attachments, Markdown and PDF export, subfolders, locked notes
-- [x] Backup to and restore from Google Drive, automatic and encrypted (in builds with Google sign-in)
-- [ ] Google sign-in in the official release builds
-- [ ] A notice in the app when a new version is out
-- [ ] Flathub
 
 ## License
 
-[MIT](LICENSE)
+TuxNotes is free software under the [MIT License](LICENSE). It's built with [Tauri](https://tauri.app), [Svelte](https://svelte.dev), [TipTap](https://tiptap.dev), [CodeMirror](https://codemirror.net) and [SQLite](https://sqlite.org).

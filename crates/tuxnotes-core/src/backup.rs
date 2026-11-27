@@ -74,6 +74,39 @@ pub fn backup_file_name(created_at_ms: i64) -> String {
     )
 }
 
+/// When a backup was made, from its file name ([`backup_file_name`], optionally with
+/// `.enc` for encrypted backups). `None` for any other name.
+pub fn backup_name_time(name: &str) -> Option<i64> {
+    let stamp = name
+        .strip_prefix("tuxnotes-backup-")?
+        .strip_suffix(".zip")
+        .or_else(|| {
+            name.strip_prefix("tuxnotes-backup-")?
+                .strip_suffix(".zip.enc")
+        })?;
+    let b = stamp.as_bytes();
+    if b.len() != 15
+        || b[8] != b'-'
+        || !b
+            .iter()
+            .enumerate()
+            .all(|(i, c)| i == 8 || c.is_ascii_digit())
+    {
+        return None;
+    }
+    let num = |r: std::ops::Range<usize>| stamp[r].parse::<i64>().ok();
+    let (y, mo, d) = (num(0..4)?, num(4..6)?, num(6..8)?);
+    let (h, mi, s) = (num(9..11)?, num(11..13)?, num(13..15)?);
+    if !(1..=12).contains(&mo) || !(1..=31).contains(&d) || h > 23 || mi > 59 || s > 59 {
+        return None;
+    }
+    let days = days_from_civil(y, mo as u32, d as u32);
+    if civil_from_days(days) != (y, mo as u32, d as u32) {
+        return None; // e.g. 31 February
+    }
+    Some((days * 86_400 + h * 3600 + mi * 60 + s) * 1000)
+}
+
 /// Write a backup of `store` (and the files in `attachments_dir`, if given) to `dest`,
 /// which must not exist. The archive is written to a temporary file first and renamed
 /// into place, so `dest` is either complete or absent.
@@ -573,6 +606,17 @@ fn now_ms() -> i64 {
 }
 
 /// Days since 1970-01-01 → (year, month, day). Howard Hinnant's algorithm.
+/// Days since 1970-01-01 for a date (the inverse of [`civil_from_days`]).
+fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let mp = i64::from((m + 9) % 12);
+    let doy = (153 * mp + 2) / 5 + i64::from(d) - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = z.div_euclid(146_097);
@@ -588,6 +632,31 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_time_from_a_backup_name() {
+        for ms in [0, 1_763_560_533_000, 951_782_400_000, 4_102_444_799_000] {
+            let name = backup_file_name(ms);
+            assert_eq!(backup_name_time(&name), Some(ms), "{name}");
+            assert_eq!(backup_name_time(&format!("{name}.enc")), Some(ms));
+        }
+        assert_eq!(
+            backup_name_time("tuxnotes-backup-20261119-140533.zip"),
+            Some(1_795_097_133_000)
+        );
+        for other in [
+            "tuxnotes-backup-20261119-140533.zip.partial",
+            "tuxnotes-backup-20261119-140533",
+            "tuxnotes-backup-2026111-1405333.zip",
+            "tuxnotes-backup-20260231-000000.zip",
+            "tuxnotes-backup-20261119-250000.zip",
+            "tuxnotes-before-restore-20261119-140533.zip",
+            "notes.zip",
+            "tuxnotes-backup-2026111a-140533.zip",
+        ] {
+            assert_eq!(backup_name_time(other), None, "{other}");
+        }
+    }
 
     fn manifest(database_size: u64, attachments: Vec<(&str, u64)>) -> Manifest {
         Manifest {

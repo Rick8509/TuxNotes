@@ -53,6 +53,8 @@ pub struct Settings {
     pub backup_encryption: Option<BackupEncryption>,
     /// Back up (if anything changed) when TuxNotes is closed.
     pub backup_on_close: bool,
+    /// Back up to this folder (e.g. ".../Nextcloud/TuxNotes Backups") instead of Google Drive.
+    pub backup_folder: Option<String>,
 }
 
 impl Default for Settings {
@@ -65,6 +67,7 @@ impl Default for Settings {
             google_account: None,
             backup_encryption: None,
             backup_on_close: true,
+            backup_folder: None,
         }
     }
 }
@@ -136,6 +139,7 @@ fn parse_leniently(raw: &str) -> Settings {
     field(&obj, "googleAccount", &mut s.google_account);
     field(&obj, "backupEncryption", &mut s.backup_encryption);
     field(&obj, "backupOnClose", &mut s.backup_on_close);
+    field(&obj, "backupFolder", &mut s.backup_folder);
     s
 }
 
@@ -182,12 +186,17 @@ mod tests {
         fs::write(
             &path,
             br#"{"autoBackup": "hourly", "keepBackups": 7, "backupOnClose": false,
+                "backupFolder": "/media/you/USB/TuxNotes Backups",
                 "backupEncryption": {"salt": "00ff", "mKib": 65536, "t": 3, "p": 1}}"#,
         )
         .unwrap();
         let s = SettingsStore::load(path.clone()).get();
         assert_eq!(s.auto_backup, AutoBackup::Daily, "unknown value → default");
         assert_eq!((s.keep_backups, s.backup_on_close), (7, false));
+        assert_eq!(
+            s.backup_folder.as_deref(),
+            Some("/media/you/USB/TuxNotes Backups")
+        );
         assert_eq!(
             s.backup_encryption.map(|e| e.salt).as_deref(),
             Some("00ff"),

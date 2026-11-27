@@ -20,10 +20,14 @@
     <p>Features:</p>
     <ul>
       <li>Folders and subfolders, pinned notes and a Recently Deleted folder</li>
-      <li>Headings, lists, checklists, tables and links</li>
-      <li>Images and file attachments: paste, drag in or attach</li>
-      <li>Instant search across all notes, with highlights in the note</li>
+      <li>Headings, lists, checklists, tables, links and code blocks in colour</li>
+      <li>Slash commands: type / to insert anything</li>
+      <li>Images you can resize, crop and rotate, and file attachments</li>
+      <li>Instant search across all notes, and a command palette for every action</li>
+      <li>Spell checking in your languages</li>
       <li>Password-locked notes, encrypted on your computer</li>
+      <li>Automatic backups to a USB drive or a synced folder, optionally encrypted</li>
+      <li>Open text, code and Markdown files in a tabbed editor with syntax colours</li>
       <li>Export to Markdown or PDF, print, and import Markdown files</li>
       <li>Light and dark look, keyboard shortcuts for everything</li>
     </ul>
@@ -52,16 +56,32 @@
 
   <screenshots>
     <screenshot type="default">
-      <caption>Notes in folders, with tables and checklists</caption>
+      <caption>Notes in folders, with pictures and checklists</caption>
       <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/notes-light.png</image>
     </screenshot>
     <screenshot>
-      <caption>Dark look</caption>
-      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/checklist-dark.png</image>
+      <caption>Dark look, with a code block in colour</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/notes-dark.png</image>
     </screenshot>
     <screenshot>
-      <caption>Search across all notes</caption>
-      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/search-light.png</image>
+      <caption>Slash commands insert anything at the cursor</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/slash-commands.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The command palette finds every action, folder and note</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/command-palette.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Text and code files in the Files window</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/files-code.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Markdown files as a page you can edit</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/files-markdown.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Backups to a USB drive or a synced folder</caption>
+      <image>https://raw.githubusercontent.com/Rick8509/TuxNotes/main/docs/screenshots/backup.png</image>
     </screenshot>
   </screenshots>
 
@@ -81,6 +101,9 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="0.2.0" date="2026-11-27">
+      <url type="details">https://github.com/Rick8509/TuxNotes/releases/tag/v0.2.0</url>
+    </release>
     <release version="0.1.0" date="2026-11-23">
       <url type="details">https://github.com/Rick8509/TuxNotes/releases/tag/v0.1.0</url>
     </release>

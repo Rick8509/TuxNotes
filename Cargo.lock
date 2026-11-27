@@ -5377,14 +5377,16 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tuxnotes"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "dirs",
+ "encoding_rs",
  "env_logger",
  "gtk",
  "keyring",
  "log",
  "reqwest",
+ "semver",
  "serde",
  "serde_json",
  "tauri",
@@ -5393,16 +5395,18 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tauri-plugin-window-state",
+ "tempfile",
  "tokio",
  "tuxnotes-core",
  "tuxnotes-gdrive",
  "webkit2gtk",
+ "wiremock",
  "zeroize",
 ]
 
 [[package]]
 name = "tuxnotes-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -5421,7 +5425,7 @@ dependencies = [
 
 [[package]]
 name = "tuxnotes-gdrive"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "getrandom 0.4.3",

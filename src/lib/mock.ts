@@ -330,9 +330,23 @@ const handlers: Record<string, (a: Args) => unknown> = {
   },
 };
 
-// --------------------------------------------------------- fake Google Drive
+// --------------------------------------------------------- fake Google Drive and folders
+// Folder backups: the folder dialog "picks" globalThis.__mockPickFolder (default
+// /home/you/Nextcloud; null = cancelled). __mockUnplug(path, true) makes a backups folder
+// unavailable, like a USB drive that's unplugged.
 
 type MockBackupFile = { info: BackupInfo; data: string; password: string | null };
+const folderFiles: Record<string, MockBackupFile[]> = {};
+const unplugged = new Set<string>();
+const g = globalThis as unknown as { __mockPickFolder?: string | null; __mockUnplug?: (dir: string, off: boolean) => void };
+g.__mockUnplug = (dir, off) => (off ? unplugged.add(dir) : unplugged.delete(dir));
+const backupsDirIn = (picked: string) =>
+  picked.endsWith("/TuxNotes Backups") || folderFiles[picked]?.length ? picked : `${picked}/TuxNotes Backups`;
+const folderList = (dir: string) => {
+  if (unplugged.has(dir) || !folderFiles[dir])
+    fail(`The backup folder isn't available: ${dir}. If it's on a USB drive, plug the drive in; or choose another folder in Settings → Backup.`);
+  return folderFiles[dir];
+};
 const backup: BackupStatus & { files: MockBackupFile[]; cancel?: () => void; password: string | null } = {
   clientSource: "builtIn",
   signedIn: false,
@@ -344,19 +358,146 @@ const backup: BackupStatus & { files: MockBackupFile[]; cancel?: () => void; pas
   lastBackupError: null,
   encrypted: false,
   backupOnClose: true,
+  backupFolder: null,
+  folderAvailable: false,
   files: [],
   password: null,
 };
 const status = (): BackupStatus => {
   const { files: _f, cancel: _c, password: _p, ...rest } = backup;
-  return { ...rest, encrypted: backup.password !== null };
+  const folderAvailable = !!backup.backupFolder && !unplugged.has(backup.backupFolder);
+  // localStorage "tuxnotes-mock-google" = "off": a copy of TuxNotes without Google sign-in (like the releases).
+  const clientSource = localStorage.getItem("tuxnotes-mock-google") === "off" ? "none" : rest.clientSource;
+  return { ...rest, clientSource, encrypted: backup.password !== null, folderAvailable };
+};
+/** The backups list of the backup place (or of the folder picked to restore from). */
+const placeFiles = (picked?: unknown): { files: MockBackupFile[]; dir: string | null } => {
+  if (typeof picked === "string") {
+    const dir = backupsDirIn(picked);
+    return { files: folderList(dir), dir };
+  }
+  if (backup.backupFolder) return { files: folderList(backup.backupFolder), dir: backup.backupFolder };
+  signedIn();
+  return { files: backup.files, dir: null };
 };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const signedIn = () => backup.signedIn || fail("You're not signed in to Google Drive.");
 
+// Files window: files come from localStorage "tuxnotes-mock-files" ([{ path, text }]);
+// "Open File…" adds an example. Names ending in .bin behave like binary files, paths
+// under /etc/ are read-only, and Save As saves to /home/you/Documents/. Tests can
+// change or delete a file "outside TuxNotes" with __mockFileChange(path, text | null).
+type MockFile = { path: string; name: string; text: string; modified: number; exists: boolean; encoding: string };
+const mockFiles = new Map<string, MockFile>();
+let mockPendingFiles: string[] = [];
+let mockFilesSeeded = false;
+let mockClock = Date.now();
+const mockTick = () => (mockClock += 1000);
+function mockRegisterFile(path: string, text: string, encoding = "UTF-8"): string {
+  let id = [...mockFiles].find(([, f]) => f.path === path)?.[0];
+  if (!id) {
+    id = `f${mockFiles.size + 1}`;
+    mockFiles.set(id, { path, name: path.split("/").pop() ?? path, text, modified: mockTick(), exists: true, encoding });
+  }
+  return id;
+}
+function mockQueueFile(path: string, text: string, encoding?: string) {
+  const id = mockRegisterFile(path, text, encoding);
+  if (!mockPendingFiles.includes(id)) mockPendingFiles.push(id);
+}
+function seedMockFiles() {
+  if (mockFilesSeeded) return;
+  mockFilesSeeded = true;
+  try {
+    const seed = JSON.parse(localStorage.getItem("tuxnotes-mock-files") ?? "[]") as { path: string; text: string; encoding?: string }[];
+    for (const f of seed) mockQueueFile(f.path, f.text, f.encoding);
+  } catch {
+    /* no seed */
+  }
+}
+function mockTextFile(id: string) {
+  const f = mockFiles.get(id) ?? fail("That file isn't open.");
+  if (!f.exists) fail(`Couldn't open “${f.name}”: it no longer exists`);
+  if (f.name.endsWith(".bin")) fail(`“${f.name}” isn't a text file, so TuxNotes can't show it.`);
+  return {
+    id,
+    path: f.path,
+    name: f.name,
+    text: f.text,
+    encoding: f.encoding,
+    lineEnding: f.text.includes("\r\n") ? "CRLF" : "LF",
+    readOnly: f.path.startsWith("/etc/"),
+    size: f.text.length,
+    modified: f.modified,
+  };
+}
+(globalThis as { __mockFileChange?: unknown }).__mockFileChange = (path: string, text: string | null) => {
+  const f = [...mockFiles.values()].find((x) => x.path === path);
+  if (!f) return;
+  if (text === null) f.exists = false;
+  else Object.assign(f, { text, exists: true, modified: mockTick() });
+};
+(globalThis as { __mockFileText?: unknown }).__mockFileText = (path: string) =>
+  [...mockFiles.values()].find((x) => x.path === path)?.text ?? null;
+
+// Spelling: pretend these dictionaries are installed; tests read the calls.
+const MOCK_DICTIONARIES = ["de_DE", "en_GB", "en_US", "fr_FR"];
+const spellingCalls: { enabled: boolean; languages: string[] }[] = [];
+(globalThis as { __spellingCalls?: typeof spellingCalls }).__spellingCalls = spellingCalls;
+
 Object.assign(handlers, {
+  take_pending_files: () => {
+    seedMockFiles();
+    const ids = mockPendingFiles;
+    mockPendingFiles = [];
+    return ids.map((id) => ({ id, path: mockFiles.get(id)!.path, name: mockFiles.get(id)!.name }));
+  },
+  read_text_file: ({ id }: Args) => mockTextFile(id as string),
+  file_status: ({ id }: Args) => {
+    const f = mockFiles.get(id as string) ?? fail("That file isn't open.");
+    return { exists: f.exists, modified: f.exists ? f.modified : 0, size: f.exists ? f.text.length : 0 };
+  },
+  save_text_file: ({ id, text, encoding, lineEnding, expectedModified, force }: Args) => {
+    const f = mockFiles.get(id as string) ?? fail("That file isn't open.");
+    if (f.path.startsWith("/etc/")) fail(`Couldn't save “${f.name}”: you don't have permission to change it`);
+    if (!force && f.exists && expectedModified != null && f.modified !== expectedModified) fail("CHANGED_ON_DISK");
+    if (encoding === "Windows-1252" && /[^\u0000-\u00ff]/.test(text as string)) fail("UNMAPPABLE");
+    // Like the app: the editor's "\n" line breaks are saved as the file's own.
+    const saved = lineEnding === "CRLF" ? (text as string).replace(/\r?\n/g, "\r\n") : text;
+    Object.assign(f, { text: saved, encoding, exists: true, modified: mockTick() });
+    return mockTextFile(id as string);
+  },
+  save_text_file_as: ({ id, text, encoding }: Args) => {
+    const f = mockFiles.get(id as string) ?? fail("That file isn't open.");
+    const newId = mockRegisterFile(`/home/you/Documents/copy of ${f.name}`, "");
+    Object.assign(mockFiles.get(newId)!, { text, encoding, exists: true, modified: mockTick() });
+    return mockTextFile(newId);
+  },
+  open_file_dialog: () => {
+    mockQueueFile("/home/you/Documents/example.py", 'def greet(name):\n    print(f"Hello, {name}!")\n\ngreet("TuxNotes")\n');
+    return 1;
+  },
+  // The "latest release": localStorage "tuxnotes-mock-latest" ("0.1.0" by default; "offline" fails).
+  check_for_update: () => {
+    const g = globalThis as { __updateChecks?: number };
+    g.__updateChecks = (g.__updateChecks ?? 0) + 1;
+    const latest = localStorage.getItem("tuxnotes-mock-latest") ?? "0.1.0";
+    if (latest === "offline") fail("Couldn't reach GitHub. Are you online?");
+    const parts = (v: string) => v.split(".").map(Number);
+    const [a, b] = [parts(latest), parts("0.1.0")];
+    const newer = a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
+    return { current: "0.1.0", latest, newer: newer > 0, url: `https://github.com/Rick8509/TuxNotes/releases/tag/v${latest}` };
+  },
+  spelling_info: () => ({ available: MOCK_DICTIONARIES, systemDefault: ["en_US"] }),
+  set_spelling: ({ enabled, languages }: Args) => {
+    const langs = (languages as string[]).length ? (languages as string[]) : ["en_US"];
+    spellingCalls.push({ enabled: enabled as boolean, languages: languages as string[] });
+    return enabled ? langs.filter((l) => MOCK_DICTIONARIES.includes(l)) : [];
+  },
   backup_status: status,
   app_info: () => ({
+    name: "TuxNotes",
+    dev: false,
     version: "0.1.0 (browser preview)",
     dataDir: "~/.local/share/io.github.Rick8509.TuxNotes",
     database: "~/.local/share/io.github.Rick8509.TuxNotes/notes.db",
@@ -390,8 +531,19 @@ Object.assign(handlers, {
     Object.assign(backup, { signedIn: false, account: null });
     return status();
   },
+  pick_backup_folder: () => (g.__mockPickFolder === undefined ? "/home/you/Nextcloud" : g.__mockPickFolder),
+  set_backup_folder: ({ folder }: Args) => {
+    let dir: string | null = null;
+    if (typeof folder === "string") {
+      if (folder.startsWith("/readonly")) fail(`TuxNotes can't save files in ${folder}/TuxNotes Backups: it's read-only`);
+      dir = backupsDirIn(folder);
+      folderFiles[dir] ??= [];
+    }
+    Object.assign(backup, { backupFolder: dir, lastBackupAt: null, lastBackupError: null });
+    return status();
+  },
   backup_now: async () => {
-    signedIn();
+    const place = placeFiles();
     backup.busy = "backingUp";
     await wait(600);
     const t = now();
@@ -407,19 +559,21 @@ Object.assign(handlers, {
       encrypted,
       needsPassword: false,
     };
-    backup.files.unshift({ info, data, password: backup.password });
-    backup.files = backup.files.slice(0, backup.keepBackups);
+    if (place.dir) info.id = info.name;
+    place.files.unshift({ info, data, password: backup.password });
+    place.files.splice(backup.keepBackups);
     Object.assign(backup, { busy: null, lastBackupAt: t, lastBackupError: null });
     return info;
   },
-  list_backups: async () => {
-    signedIn();
+  list_backups: async ({ folder }: Args) => {
+    const { files } = placeFiles(folder);
     await wait(300);
-    return backup.files.map((f) => ({ ...f.info, needsPassword: f.password !== null && f.password !== backup.password }));
+    return files.map((f) => ({ ...f.info, needsPassword: f.password !== null && f.password !== backup.password }));
   },
-  restore_backup: async ({ id, password }: Args) => {
-    signedIn();
-    const file = backup.files.find((f) => f.info.id === id) ?? fail("Backup not found.");
+  restore_backup: async ({ id, password, folder }: Args) => {
+    const nowhereYet = !backup.backupFolder && !backup.signedIn;
+    const { files, dir } = placeFiles(folder);
+    const file = files.find((f) => f.info.id === id) ?? fail("Backup not found.");
     if (file.password !== null) {
       if (password == null && file.password !== backup.password) fail(BACKUP_PASSWORD_NEEDED);
       if (password != null && password !== file.password) fail("Wrong password.");
@@ -430,6 +584,8 @@ Object.assign(handlers, {
     await wait(600);
     db = JSON.parse(file.data);
     backup.busy = null;
+    // A new computer restoring from a folder keeps backing up there.
+    if (nowhereYet && dir) backup.backupFolder = dir;
     const info = file.info;
     return { noteCount: info.noteCount, folderCount: db.folders.length, backupCreatedAt: info.createdAt, safetyCopy: "(browser mock)" };
   },

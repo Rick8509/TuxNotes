@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronRight, Folder as FolderIcon, FolderPlus, NotebookText, PanelLeftClose, Settings, Trash2 } from "@lucide/svelte";
+  import { ChevronRight, CircleArrowUp, Folder as FolderIcon, FolderPlus, NotebookText, PanelLeftClose, Settings, Trash2, X } from "@lucide/svelte";
   import { FOLDER_DRAG_TYPE, NOTE_DRAG_TYPE } from "../dnd";
   import { childrenOf, dropPlacement, totalNoteCount, visibleRows, type DropZone } from "../folders";
   import { app } from "../stores/app.svelte";
@@ -8,6 +8,8 @@
   import { sameFilter } from "../types";
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
   import Resizer from "./Resizer.svelte";
+  import { identity } from "../stores/identity.svelte";
+  import { updates } from "../stores/updates.svelte";
 
   let renamingId = $state<string | null>(null);
   let draftName = $state("");
@@ -200,7 +202,9 @@
   inert={!ui.sidebarShown}
 >
   <header class="header" data-tauri-drag-region>
-    <span class="brand" data-tauri-drag-region>TuxNotes</span>
+    <span class="brand" data-tauri-drag-region>
+      TuxNotes{#if identity.dev}<span class="dev-badge" title="{identity.name} {identity.version}: a test build with its own notes">DEV</span>{/if}
+    </span>
     <button class="icon-btn" title="Hide sidebar (Ctrl+Alt+S)" aria-label="Hide sidebar" onclick={() => ui.toggleSidebar()}>
       <PanelLeftClose size={17} />
     </button>
@@ -316,6 +320,23 @@
     {/if}
   </nav>
 
+  {#if updates.notice}
+    {@const update = updates.notice}
+    <div class="update-card" role="status">
+      <CircleArrowUp size={18} />
+      <div class="update-text">
+        <strong>TuxNotes {update.latest} is out</strong>
+        <span>You have {identity.version}.</span>
+      </div>
+      <button class="update-get" onclick={() => updates.openReleasePage().catch((e) => app.showError(`Couldn't open the browser: ${e}`))}>
+        Get It
+      </button>
+      <button class="update-close" title="Don't show again for this version" aria-label="Dismiss" onclick={() => updates.dismiss()}>
+        <X size={14} />
+      </button>
+    </div>
+  {/if}
+
   <footer class="footer">
     <button class="new-folder" onclick={() => startCreate(null)} title="New Folder (Ctrl+Shift+N)">
       <FolderPlus size={16} />
@@ -381,6 +402,18 @@
     font-weight: 600;
     color: var(--text-secondary);
     letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .dev-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: #e8590c;
+    color: #fff;
   }
   .scroll {
     flex: 1;
@@ -500,6 +533,67 @@
     border-radius: 5px;
     background: var(--bg-list);
     outline: none;
+  }
+  .update-card {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 6px 10px 2px;
+    padding: 9px 8px 9px 11px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--accent) 18%, var(--bg-sidebar));
+    color: var(--text);
+    animation: rise 0.2s ease-out;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 6px;
+    }
+  }
+  .update-card > :global(svg) {
+    flex: none;
+    color: var(--accent-strong);
+  }
+  .update-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    font-size: 12px;
+    line-height: 1.3;
+  }
+  .update-text strong {
+    font-weight: 600;
+    font-size: 12.5px;
+  }
+  .update-text span {
+    color: var(--text-secondary);
+  }
+  .update-get {
+    flex: none;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-contrast);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .update-get:hover {
+    background: var(--accent-strong);
+  }
+  .update-close {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    color: var(--text-secondary);
+  }
+  .update-close:hover {
+    background: var(--bg-hover);
+    color: var(--text);
   }
   .footer {
     flex: none;

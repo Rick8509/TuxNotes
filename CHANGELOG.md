@@ -4,6 +4,39 @@ All notable changes to TuxNotes are listed here.
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-27
+
+Back up to a USB drive or a synced folder without any account, find anything with the new command palette, insert things with slash commands, and open text, code and Markdown files in the new Files window. Plus spell checking, code blocks in colour, image editing and a notice when a new version is out.
+
+### Backup
+- **Back up to a folder.** Settings → Backup → **Back Up to a Folder…**: choose a folder, for example on a USB drive or one that Nextcloud, Dropbox or Syncthing keeps in sync. TuxNotes backs up into a **TuxNotes Backups** folder there, right away and then daily or weekly, keeping the last N backups. No account needed; Back Up Now, back up when closing, encryption and Restore all work as with Google Drive.
+- Each backup is one complete file, written in full before it appears, so sync programs never pick up half a backup and pulling out a USB drive midway can't leave a damaged one. Only files named like TuxNotes backups are ever removed from the folder.
+- An unplugged drive shows as "not available right now"; automatic backups wait for it and carry on once it's back.
+- **Restore from a folder** works on a new computer and from any folder (**Another folder…**). Restoring when no backup place is set yet keeps backing up to that folder.
+
+### Finding things
+- **Command palette.** **Ctrl+Shift+P** opens one search box for every action (export as PDF, dark appearance, lock note, back up now…), folder and note, by title or by words inside it. It finds things the forgiving way: case and accents don't matter, other words work ("theme", "trash", "word count"), and several words narrow it down ("export pdf"). With nothing typed it shows your recent notes. **Move Note to Folder…** asks for the folder in the same box.
+
+### Writing notes
+- **Slash commands.** Type `/` at the start of a line or after a space to insert anything from a menu at the cursor: Title, Heading, Subheading, Body, Code Block, Quote, Checklist, lists, Table, Image or File, Link, Divider, and today's date, the time or both. Keep typing to filter; other words and short forms work too ("todo", "h2", "hr", "img"). ↑/↓ and Enter or Tab to choose, Esc to close. The empty line you're on shows "Type / for commands".
+- **Spell checking.** Misspelled words are underlined; right-click one for suggestions, **Ignore Spelling** or **Learn Spelling**. It uses the dictionaries installed on your computer (Hunspell, e.g. `hunspell-en-us`) and starts with your desktop's language. **Settings → General → Spelling** turns it off or picks one or more languages. Code and links aren't checked.
+- **Code blocks in colour.** Code blocks (now called **Code Block** instead of Monospaced) get syntax colours. A small bar on each block picks the language (about 35, or Auto-detect) and has a **Copy** button. Typing three backticks and a language name (```` ```python ````) starts a block in that language.
+- **Resize images**: drag the round handle at an image's corner (it snaps to a quarter, half, three quarters and full width), or right-click → **Small**, **Medium**, **Large**, **Full Width** or **Original Size**.
+- **Edit images**: right-click → **Edit Image…** to rotate, flip and crop (free, Square, 4:3, 16:9 or 3:2), or **Rotate Left** / **Rotate Right**. The original stays until it's no longer used, so **Undo** brings it back.
+
+### Files window: text, code and Markdown files
+- **Open text and code files** in a new Files window with tabs: **Open With → TuxNotes** in the file manager, `tuxnotes file.txt`, drag files onto it, or **⋯ → Open File…** / **Ctrl+O**. Files stay files on your disk; nothing is added to your notes. Opened from the file manager, only the Files window appears.
+- **Syntax colours** for about 140 languages, found from the file name or a script's first line, with a language picker in the status bar. Line numbers, matching brackets, folding, and **Alt+Z** to wrap long lines. The status bar shows line and column, selection and indentation.
+- **Edit and save**: **Ctrl+S**, **Ctrl+Shift+S** to save under another name. Files keep their encoding (UTF-8, UTF-16, older Windows files) and line endings, and are saved safely: the original is replaced only once the new file is fully written. A dot shows unsaved changes, and closing asks Save / Don't Save / Cancel.
+- **Changes from other programs**: an open file reloads by itself, or, if you've edited it, you choose **Reload** or **Keep Mine**. Saving never silently overwrites someone else's change. Deleted and read-only files say so; binary and very large files (over 20 MB) get a clear message.
+- **Markdown files as a formatted page.** `.md` files open as a page that looks and edits like a note. **Formatted | Markdown** in the status bar (or **Ctrl+Shift+M**) switches to the text and back. Saving rewrites only the parts you changed; everything else stays exactly as written.
+
+### App
+- **New version notice.** Once a day TuxNotes asks GitHub whether a newer release is out (only that question is sent). If so, a card in the sidebar says so, with **Get It** and ✕. **Settings → General → Updates** turns this off and has **Check Now**.
+
+### Compatibility
+- Image sizes are new: TuxNotes 0.1.0 shows resized images at their own size, and editing such a note there forgets the size.
+
 ## 0.1.0 - 2026-11-23
 
 ### Added

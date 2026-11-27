@@ -40,6 +40,19 @@
 
   --header-h: 52px;
 
+  /* Syntax colours in the Files window (Xcode-like). */
+  --syntax-keyword: #ad3da4;
+  --syntax-string: #c41a16;
+  --syntax-number: #272ad8;
+  --syntax-comment: #707f8c;
+  --syntax-type: #0b4f79;
+  --syntax-function: #326d74;
+  --syntax-property: #6c36a9;
+  --syntax-tag: #0b4f79;
+  --syntax-attribute: #6c36a9;
+  --syntax-operator: #4f4f55;
+  --syntax-link: #0e0eff;
+
   color-scheme: light;
 }
 
@@ -72,6 +85,18 @@
   --shadow-pop: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
 
   color-scheme: dark;
+
+  --syntax-keyword: #ff7ab2;
+  --syntax-string: #ff8170;
+  --syntax-number: #d9c97c;
+  --syntax-comment: #7f8c98;
+  --syntax-type: #6bdfff;
+  --syntax-function: #78c2b3;
+  --syntax-property: #b281eb;
+  --syntax-tag: #6bdfff;
+  --syntax-attribute: #b281eb;
+  --syntax-operator: #c3c3c7;
+  --syntax-link: #6bdfff;
 }
 
 *,
@@ -259,6 +284,11 @@ input {
   }
   .prose img.note-image {
     max-height: none !important;
+  }
+  .prose .note-image-handle,
+  .prose .note-image-badge,
+  .prose .code-block-bar {
+    display: none !important;
   }
   .prose img.note-image,
   .prose table,

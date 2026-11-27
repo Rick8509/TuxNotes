@@ -9,10 +9,14 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { api, errorText, isTauri } from "../api";
   import { NOTE_DRAG_TYPE } from "../dnd";
-  import { nodeForAttachment } from "../editor/attachmentNodes";
+  import { nodeForAttachment, parseImageWidth } from "../editor/attachmentNodes";
+  import { NO_EDITS, outputMime, outputName, renderEdited, rotate, sniffMime } from "../imageEdit";
+  import ImageEditor from "./ImageEditor.svelte";
   import { contentExtensions } from "../editor/content";
   import { ChecklistSort, checklistActions } from "../editor/checklist";
   import { SearchHighlight, getSearch, goToMatch, scrollToPos, setSearch } from "../editor/search";
+  import { SlashCommands, slashPluginKey, type SlashCommand, type SlashMenuView } from "../editor/slashCommands";
+  import { exitSuggestion } from "@tiptap/suggestion";
   import { formatEditorDate } from "../format";
   import { exportMarkdown, exportPdf, importMarkdown, printNote } from "../importExport";
   import { displayUrl, isOpenableUrl } from "../links";
@@ -26,6 +30,7 @@
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
   import EditorToolbar from "./EditorToolbar.svelte";
   import LinkForm from "./LinkForm.svelte";
+  import SlashMenu from "./SlashMenu.svelte";
   import WindowControls from "./WindowControls.svelte";
 
   let element: HTMLDivElement;
@@ -73,6 +78,91 @@
       return { Tab: () => this.editor.commands.insertContent("\t") };
     },
   });
+
+  // --------------------------------------------------------- slash commands
+
+  /** The "/" menu while it's open: matching commands, highlighted one and position. */
+  let slash = $state<{ items: SlashCommand[]; index: number; query: string; x: number; y: number; above: boolean } | null>(null);
+  /** Runs the chosen command (replacing the typed "/query"); set by the suggestion plugin. */
+  let slashPick: ((item: SlashCommand) => void) | null = null;
+  const SLASH_MENU_WIDTH = 320;
+  /** Room the menu needs below the cursor before it opens upwards instead. */
+  const SLASH_MENU_ROOM = 380;
+
+  /** Under the "/" (or above it when there isn't room), in the scroller's coordinates. */
+  function placeSlashMenu(rect: DOMRect | null | undefined) {
+    const r = scroller.getBoundingClientRect();
+    const caret = rect ?? new DOMRect(r.left + 24, r.top + 24, 0, 18);
+    const below = r.bottom - caret.bottom;
+    const above = below < SLASH_MENU_ROOM && caret.top - r.top > below;
+    return {
+      x: Math.max(8, Math.min(caret.left - r.left - 10, scroller.clientWidth - SLASH_MENU_WIDTH - 8)),
+      y: (above ? caret.top - r.top - 6 : caret.bottom - r.top + 6) + scroller.scrollTop,
+      above,
+    };
+  }
+
+  const slashView: SlashMenuView = {
+    show: (props) => {
+      slashPick = props.command;
+      // Same query (e.g. an unrelated update): keep the highlighted item.
+      const keep = slash && slash.query === props.query ? Math.min(slash.index, props.items.length - 1) : 0;
+      slash = { items: props.items, index: Math.max(0, keep), query: props.query, ...placeSlashMenu(props.clientRect?.()) };
+    },
+    hide: () => {
+      slash = null;
+      slashPick = null;
+    },
+    keydown: ({ event }) => {
+      const s = slash;
+      if (!s) return false;
+      const count = s.items.length;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        if (count) s.index = (s.index + (event.key === "ArrowDown" ? 1 : -1) + count) % count;
+        return true;
+      }
+      if ((event.key === "Enter" || event.key === "Tab") && !event.shiftKey && !event.ctrlKey && !event.altKey) {
+        // Nothing matches: let Enter and Tab do their usual thing (the menu closes).
+        if (!count) return false;
+        pickSlash(s.items[s.index]);
+        return true;
+      }
+      if (event.key === "Escape") slash = null; // the plugin closes it and keeps it closed
+      return false;
+    },
+  };
+
+  function pickSlash(item: SlashCommand) {
+    const pick = slashPick;
+    slash = null;
+    pick?.(item);
+  }
+
+  // Settings → Spelling off: no underlines in the note (WebKit's checker is off too).
+  $effect(() => {
+    editor?.view.dom.setAttribute("spellcheck", String(prefs.spellCheck));
+  });
+
+  // Screen readers: the note (which keeps the focus) points at the highlighted command.
+  $effect(() => {
+    const dom = editor?.view.dom;
+    if (!dom) return;
+    const active = slash?.items[slash.index];
+    if (active) {
+      dom.setAttribute("aria-controls", "slash-menu-list");
+      dom.setAttribute("aria-activedescendant", `slash-item-${active.id}`);
+    } else {
+      dom.removeAttribute("aria-controls");
+      dom.removeAttribute("aria-activedescendant");
+    }
+  });
+
+  /** Close the menu without choosing (clicked elsewhere, switched notes). */
+  function closeSlash() {
+    if (!slash) return;
+    slash = null;
+    if (editor) exitSuggestion(editor.view, slashPluginKey);
+  }
 
   // ----------------------------------------------------- find & highlights
 
@@ -378,6 +468,101 @@
     ];
   }
 
+  // ------------------------------------------------------------------ images
+
+  /** Image being edited in Edit Image… (with where it was when the menu opened). */
+  let imageEdit = $state<{ attachmentId: string; name: string; pos: number } | null>(null);
+
+  /** Right-click on an image: edit, rotate, sizes. */
+  function imageMenu(pos: number, attachmentId: string): MenuItem[] {
+    const node = editor?.state.doc.nodeAt(pos);
+    const width = parseImageWidth(node?.attrs.width);
+    const name = (node?.attrs.alt as string | null) || "image";
+    const size = (label: string, value: number | null) => ({
+      label: width === value ? `✓  ${label}` : `     ${label}`,
+      action: () => setImageWidth(pos, attachmentId, value),
+    });
+    return [
+      { label: "Edit Image…", action: () => (imageEdit = { attachmentId, name, pos }) },
+      { label: "Rotate Left", action: () => void quickRotate(pos, attachmentId, -1) },
+      { label: "Rotate Right", action: () => void quickRotate(pos, attachmentId, 1) },
+      { kind: "separator" },
+      { kind: "heading", label: "Size" },
+      size("Small", 25),
+      size("Medium", 50),
+      size("Large", 75),
+      size("Full Width", 100),
+      size("Original Size", null),
+    ];
+  }
+
+  /** Where the image is now: at `pos` if it's still there, else the first one showing it. */
+  function findImage(pos: number, attachmentId: string): number | null {
+    const doc = editor?.state.doc;
+    if (!doc) return null;
+    const at = pos < doc.content.size ? doc.nodeAt(pos) : null;
+    if (at?.type.name === "image" && at.attrs.attachmentId === attachmentId) return pos;
+    let found: number | null = null;
+    doc.descendants((n, p) => {
+      if (found === null && n.type.name === "image" && n.attrs.attachmentId === attachmentId) found = p;
+      return found === null;
+    });
+    return found;
+  }
+
+  function setImageAttrs(pos: number, attachmentId: string, attrs: Record<string, unknown>) {
+    const ed = editor;
+    const at = findImage(pos, attachmentId);
+    if (!ed || at === null) return;
+    const node = ed.state.doc.nodeAt(at)!;
+    ed.chain()
+      .command(({ tr }) => {
+        tr.setNodeMarkup(at, undefined, { ...node.attrs, ...attrs });
+        return true;
+      })
+      .setNodeSelection(at)
+      .focus()
+      .run();
+  }
+
+  function setImageWidth(pos: number, attachmentId: string, width: number | null) {
+    setImageAttrs(pos, attachmentId, { width });
+  }
+
+  /** The edited image becomes a new attachment shown in place of the old one. Undo brings
+   *  the old one back (unused attachments are only cleaned up after a day). */
+  async function replaceImage(pos: number, oldId: string, blob: Blob, mime: string, name: string) {
+    const noteId = loadedId;
+    if (!noteId) return;
+    // The browser engine may not write every format (WebP): it then gives PNG instead.
+    const actual = blob.type || mime;
+    const file = new File([blob], outputName(name, actual), { type: actual });
+    const added = await api.addAttachment(noteId, file);
+    if (loadedId !== noteId) return; // switched notes meanwhile
+    setImageAttrs(pos, oldId, { attachmentId: added.id });
+  }
+
+  async function quickRotate(pos: number, attachmentId: string, direction: 1 | -1) {
+    try {
+      const bytes = new Uint8Array(await api.attachmentImage(attachmentId));
+      const type = sniffMime(bytes);
+      const url = URL.createObjectURL(new Blob([bytes], { type }));
+      try {
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        const mime = outputMime(type);
+        const blob = await renderEdited(img, img.naturalWidth, img.naturalHeight, rotate(NO_EDITS, direction), mime);
+        const name = (editor?.state.doc.nodeAt(pos)?.attrs.alt as string | null) || "image";
+        await replaceImage(pos, attachmentId, blob, mime, name);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      app.showError(`Couldn't rotate the image: ${errorText(e)}`);
+    }
+  }
+
   /**
    * Right-click: TuxNotes' own menus where there's no text (images and files, a checklist
    * item's checkbox, a multi-cell table selection). On text the system menu stays, with
@@ -393,8 +578,10 @@
       const id = attachmentEl.dataset.attachmentId!;
       const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
       if (at && at.inside >= 0) ed.commands.setNodeSelection(at.inside);
+      const node = at && at.inside >= 0 ? ed.state.doc.nodeAt(at.inside) : null;
       const items = attachmentMenu(id);
-      tableMenu = { x: event.clientX, y: event.clientY, items: ed.isEditable ? items : items.slice(0, 2) };
+      const all = node?.type.name === "image" && ed.isEditable ? [...imageMenu(at!.inside, id), { kind: "separator" as const }, ...items] : items;
+      tableMenu = { x: event.clientX, y: event.clientY, items: ed.isEditable ? all : items.slice(0, 2) };
       return true;
     }
     if (target.closest('ul[data-type="taskList"] > li > label') && ed.isEditable) {
@@ -479,6 +666,9 @@
         { label: "Print…", action: printNote, disabled: !visible },
         { kind: "separator" },
         { label: "Import Markdown Files…", action: importMarkdown },
+        { kind: "separator" },
+        // Text and code files open in the Files window; they stay files (not notes).
+        { label: "Open File…   Ctrl+O", action: () => void api.openFileDialog().catch((e) => app.showError(e)) },
       ],
     };
   }
@@ -496,7 +686,12 @@
         // Settings → General → "Move checked items to the bottom".
         ChecklistSort.configure({ enabled: () => prefs.sortChecked }),
         SearchHighlight,
-        Placeholder.configure({ placeholder: "Start writing…" }),
+        Placeholder.configure({
+          // An empty note: "Start writing…". The empty line you're on: how to insert things.
+          placeholder: ({ editor: e, node }) =>
+            e.isEmpty ? "Start writing…" : node.type.name === "paragraph" ? "Type / for commands" : "",
+        }),
+        SlashCommands({ view: () => slashView, context: () => ({ attach: attachFromPicker, link: openLinkEditor }) }),
         Shortcuts,
         TabKey,
       ],
@@ -504,7 +699,8 @@
       // Nothing can be typed until a note loads: the editor is hidden and loadNote sets this per note.
       editable: true,
       editorProps: {
-        attributes: { class: "prose", spellcheck: "true", "aria-label": "Note editor" },
+        // A function, so the spellcheck attribute follows Settings (see the effect below).
+        attributes: () => ({ class: "prose", spellcheck: String(prefs.spellCheck), "aria-label": "Note editor" }),
         handleDOMEvents: {
           click: (_view, event) => openLink(event),
           auxclick: (_view, event) => openLink(event),
@@ -521,6 +717,8 @@
         handlePaste: (_view, event) => handlePaste(event),
         handleDrop: (view, event, _slice, moved) => handleDrop(view, event, moved),
       },
+      // Clicking outside the note (but not on the menu, which keeps the focus) closes the "/" menu.
+      onBlur: () => closeSlash(),
       onTransaction: ({ editor: e }) => {
         version++;
         updateLinkBubble(e);
@@ -558,6 +756,7 @@
     // The reload counter changes when the note was changed outside TuxNotes.
     const key = note ? `${note.id}${hiddenNow ? ":hidden" : ""}:${app.outsideReload}` : null;
     if (key !== loadedKey) {
+      slash = null; // the new note starts without the "/" menu
       // Same note reloaded (changed outside): keep the place and the cursor.
       const sameNote = !!note && !!loadedKey && loadedKey.split(":")[0] === note.id;
       const keepScroll = scroller.scrollTop;
@@ -696,7 +895,7 @@
 
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
   <div
-    class="scroll first-{firstLine}"
+    class="scroll note-page first-{firstLine}"
     class:hidden={!note || hidden}
     style:--editor-font-size="{TEXT_SIZE_PX[prefs.textSize]}px"
     bind:this={scroller}
@@ -705,6 +904,16 @@
     <div class="date">{note ? formatEditorDate(note.updatedAt) : ""}</div>
     <!-- TipTap owns everything inside this element. -->
     <div bind:this={element}></div>
+
+    {#if slash}
+      <SlashMenu
+        {...slash}
+        onpick={pickSlash}
+        onhover={(i) => {
+          if (slash) slash.index = i;
+        }}
+      />
+    {/if}
 
     {#if linkBubble && !linkForm}
       <!-- mousedown is prevented so the editor keeps its cursor while a button is clicked -->
@@ -742,6 +951,22 @@
 
 {#if tableMenu}
   <ContextMenu {...tableMenu} onclose={() => (tableMenu = null)} />
+{/if}
+
+{#if imageEdit}
+  {@const edit = imageEdit}
+  <ImageEditor
+    attachmentId={edit.attachmentId}
+    name={edit.name}
+    onclose={() => {
+      imageEdit = null;
+      editor?.commands.focus();
+    }}
+    onsave={async (blob, mime) => {
+      await replaceImage(edit.pos, edit.attachmentId, blob, mime, edit.name);
+      imageEdit = null;
+    }}
+  />
 {/if}
 
 <style>
@@ -850,39 +1075,12 @@
     background: var(--bg-active);
   }
 
-  /* ---------------------------------------------------- note typography */
-  .scroll :global(.prose) {
-    outline: none;
-    tab-size: 4;
-    /* Set from Settings → Appearance → Text size; everything below scales with it. */
-    font-size: var(--editor-font-size, 15px);
-    line-height: 1.55;
-    color: var(--text);
-    min-height: 60vh;
-    caret-color: var(--accent);
-  }
-  .scroll :global(.prose > :first-child) {
-    margin-top: 0;
-  }
-  .scroll :global(.prose p) {
-    margin: 0;
-  }
-  .scroll :global(.prose h1) {
-    font-size: 1.733em;
-    font-weight: 700;
-    line-height: 1.25;
-    margin: 0.6em 0 0.3em;
-  }
-  .scroll :global(.prose h2) {
-    font-size: 1.333em;
-    font-weight: 700;
-    margin: 0.8em 0 0.25em;
-  }
-  .scroll :global(.prose h3) {
-    font-size: 1.067em;
-    font-weight: 600;
-    margin: 0.8em 0 0.2em;
-  }
+  
+  
+  
+  
+  
+  
   /* "New notes start with" (Settings → General): like Apple Notes, the first line
      is shown as the note's title (or heading); "Body" leaves it as normal text. */
   .scroll.first-title :global(.prose > p:first-child),
@@ -899,55 +1097,36 @@
     font-weight: 700;
     margin-bottom: 0.25em;
   }
-  .scroll :global(.prose ul),
-  .scroll :global(.prose ol) {
-    margin: 0.25em 0;
-    padding-left: 1.6em;
-  }
-  .scroll :global(.prose li > p) {
-    margin: 0;
-  }
-  .scroll :global(.prose blockquote) {
-    margin: 0.5em 0;
-    padding-left: 12px;
-    border-left: 3px solid var(--accent);
-    color: var(--text-secondary);
-  }
-  .scroll :global(.prose code) {
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-    padding: 1px 4px;
-    border-radius: 4px;
-    background: var(--bg-input);
-  }
-  .scroll :global(.prose pre) {
-    font-family: var(--font-mono);
-    font-size: 0.867em;
-    padding: 10px 12px;
-    border-radius: var(--radius-md);
-    background: var(--bg-input);
-    overflow-x: auto;
-  }
-  .scroll :global(.prose pre code) {
-    padding: 0;
-    background: none;
-  }
-  .scroll :global(.prose a) {
-    color: var(--accent-strong);
-    cursor: text;
-  }
-  .scroll :global(.prose hr) {
-    border: none;
-    border-top: 1px solid var(--separator-strong);
-    margin: 1em 0;
-  }
-  .scroll :global(.prose p.is-editor-empty:first-child::before) {
-    content: attr(data-placeholder);
-    float: left;
-    height: 0;
-    pointer-events: none;
-    color: var(--text-tertiary);
-  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
   /* ------------------------------------------------------- find & search */
   .find-bar {
@@ -989,14 +1168,8 @@
   .find-done:hover {
     background: var(--bg-hover);
   }
-  .scroll :global(.search-match) {
-    border-radius: 2px;
-    background: color-mix(in srgb, var(--accent) 38%, transparent);
-  }
-  .scroll :global(.search-match.current) {
-    background: var(--accent);
-    color: var(--accent-contrast);
-  }
+  
+  
 
   /* ----------------------------------------------------------------- links */
   .link-bubble {
@@ -1037,172 +1210,38 @@
     background: var(--separator-strong);
   }
 
-  /* ----------------------------------------------------------- attachments */
-  .scroll :global(.prose img.note-image) {
-    display: block;
-    max-width: 100%;
-    max-height: 75vh;
-    height: auto;
-    margin: 0.6em 0;
-    border-radius: var(--radius-md);
-    cursor: default;
-  }
-  .scroll :global(.prose .note-file) {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    max-width: 440px;
-    margin: 0.5em 0;
-    padding: 8px 12px 8px 8px;
-    border: 1px solid var(--separator-strong);
-    border-radius: var(--radius-lg);
-    background: var(--bg-input);
-    cursor: default;
-    user-select: none;
-  }
-  .scroll :global(.prose .note-file:hover) {
-    background: var(--bg-active);
-  }
-  .scroll :global(.note-file-icon) {
-    flex: none;
-    display: grid;
-    place-items: end center;
-    width: 32px;
-    height: 40px;
-    padding-bottom: 5px;
-    border-radius: 4px 10px 4px 4px;
-    background: var(--accent);
-    color: var(--accent-contrast);
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 0.02em;
-  }
-  .scroll :global(.note-file-text) {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .scroll :global(.note-file-name) {
-    font-weight: 600;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .scroll :global(.note-file-size) {
-    font-size: 0.8em;
-    color: var(--text-secondary);
-  }
-  .scroll :global(.prose .ProseMirror-selectednode.note-image),
-  .scroll :global(.prose .ProseMirror-selectednode.note-file) {
-    outline: 3px solid var(--accent);
-    outline-offset: 2px;
-  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
-  /* ---------------------------------------------------------------- tables */
-  .scroll :global(.prose .tableWrapper) {
-    overflow-x: auto;
-    margin: 0.6em 0;
-  }
-  .scroll :global(.prose table) {
-    border-collapse: collapse;
-    table-layout: fixed;
-    width: 100%;
-    margin: 0.6em 0;
-    overflow: hidden;
-  }
-  .scroll :global(.prose .tableWrapper table) {
-    margin: 0;
-  }
-  .scroll :global(.prose td),
-  .scroll :global(.prose th) {
-    position: relative;
-    box-sizing: border-box;
-    min-width: 60px;
-    padding: 6px 10px;
-    border: 1px solid var(--separator-strong);
-    vertical-align: top;
-    text-align: left;
-  }
-  .scroll :global(.prose th) {
-    background: var(--bg-input);
-    font-weight: 600;
-  }
-  .scroll :global(.prose td > p),
-  .scroll :global(.prose th > p) {
-    margin: 0;
-  }
-  /* The first line of a note is styled as its title, but never inside a table. */
-  .scroll :global(.prose td p:first-child),
-  .scroll :global(.prose th p:first-child) {
-    font-size: inherit;
-  }
-  .scroll :global(.prose .selectedCell::after) {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    background: color-mix(in srgb, var(--accent) 22%, transparent);
-    pointer-events: none;
-  }
-  .scroll :global(.prose .column-resize-handle) {
-    position: absolute;
-    top: 0;
-    right: -2px;
-    bottom: 0;
-    width: 4px;
-    z-index: 3;
-    background: var(--accent);
-    pointer-events: none;
-  }
-  .scroll :global(.prose.resize-cursor) {
-    cursor: col-resize;
-  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
 
-  /* Checklists: round yellow checkboxes like Apple Notes. */
-  .scroll :global(ul[data-type="taskList"]) {
-    list-style: none;
-    padding-left: 0.2em;
-  }
-  .scroll :global(ul[data-type="taskList"] > li) {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  .scroll :global(ul[data-type="taskList"] > li > label) {
-    flex: none;
-    margin-top: 3px;
-    user-select: none;
-  }
-  .scroll :global(ul[data-type="taskList"] > li > div) {
-    flex: 1;
-    min-width: 0;
-  }
-  .scroll :global(ul[data-type="taskList"] > li input[type="checkbox"]) {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 18px;
-    height: 18px;
-    margin: 0;
-    border-radius: 50%;
-    border: 1.5px solid var(--text-tertiary);
-    display: grid;
-    place-items: center;
-    cursor: pointer;
-  }
-  .scroll :global(ul[data-type="taskList"] > li input[type="checkbox"]:checked) {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-  .scroll :global(ul[data-type="taskList"] > li input[type="checkbox"]:checked::after) {
-    content: "";
-    width: 4px;
-    height: 8px;
-    margin-top: -2px;
-    border: solid #fff;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-  }
-  .scroll :global(ul[data-type="taskList"] > li[data-checked="true"] > div) {
-    color: var(--text-tertiary);
-  }
+  
+  
+  
+  
+  
+  
+  
+  
 </style>

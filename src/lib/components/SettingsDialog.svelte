@@ -2,19 +2,23 @@
   // The Settings window (Ctrl+,): General, Appearance, Backup, Shortcuts, About.
   import { onMount } from "svelte";
   import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-  import { Cloud, Info, Keyboard, Palette, SlidersHorizontal, X } from "@lucide/svelte";
+  import { HardDriveUpload, Info, Keyboard, Palette, SlidersHorizontal, X } from "@lucide/svelte";
   import { api, isTauri } from "../api";
   import { app, type SettingsSection } from "../stores/app.svelte";
   import { AUTO_LOCK_CHOICES, prefs, type AutoLock, type FirstLine, type SortBy, type TextSize, type Theme } from "../stores/prefs.svelte";
   import type { AppInfo } from "../types";
+  import { identity } from "../stores/identity.svelte";
+  import { languageName, spelling } from "../stores/spelling.svelte";
+  import { updates } from "../stores/updates.svelte";
+  import { formatRelativeDateTime } from "../format";
   import BackupPanel, { type BackupView } from "./BackupPanel.svelte";
 
   const REPO_URL = "https://github.com/Rick8509/TuxNotes";
 
-  const sections: { id: SettingsSection; label: string; icon: typeof Cloud }[] = [
+  const sections: { id: SettingsSection; label: string; icon: typeof Info }[] = [
     { id: "general", label: "General", icon: SlidersHorizontal },
     { id: "appearance", label: "Appearance", icon: Palette },
-    { id: "backup", label: "Backup", icon: Cloud },
+    { id: "backup", label: "Backup", icon: HardDriveUpload },
     { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
     { id: "about", label: "About", icon: Info },
   ];
@@ -27,6 +31,7 @@
   onMount(() => {
     windowEl?.focus();
     api.appInfo().then((i) => (info = i)).catch(() => {});
+    void spelling.loadInfo();
   });
 
   /** Can't close or switch sections while a backup/restore is running. */
@@ -97,6 +102,7 @@
     {
       group: "Notes",
       items: [
+        ["Command palette: any action, folder or note", "Ctrl+Shift+P"],
         ["New note", "Ctrl+N"],
         ["New folder", "Ctrl+Shift+N"],
         ["Find in the open note", "Ctrl+F (in a note)"],
@@ -224,6 +230,100 @@
         </div>
         <p class="footnote">Notes in Recently Deleted are removed permanently after 30 days.</p>
 
+        <h3 class="subhead">Spelling</h3>
+        <div class="group">
+          <label class="row">
+            <div class="label">
+              <span>Check spelling while typing</span>
+              <span class="hint">Misspelled words are underlined in red. Right-click one for suggestions.</span>
+            </div>
+            <input
+              type="checkbox"
+              class="switch"
+              checked={prefs.spellCheck}
+              onchange={(e) => prefs.set("spellCheck", e.currentTarget.checked)}
+            />
+          </label>
+          {#if prefs.spellCheck && spelling.info}
+            {#if spelling.info.available.length}
+              <div class="row stacked">
+                <div class="label">
+                  <span>Languages</span>
+                  <span class="hint">
+                    Words are accepted if any ticked language knows them. More languages: install their dictionary (e.g. <code>hunspell-de-de</code>) and reopen TuxNotes.
+                  </span>
+                </div>
+                <div class="languages" role="group" aria-label="Spelling languages">
+                  {#each spelling.info.available as code (code)}
+                    {@const on = spelling.chosen.includes(code)}
+                    <label class="language">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={on && spelling.chosen.length === 1}
+                        title={on && spelling.chosen.length === 1 ? "At least one language stays on. Turn spell checking off above instead." : undefined}
+                        onchange={(e) => spelling.toggle(code, e.currentTarget.checked)}
+                      />
+                      <span>{languageName(code)}</span>
+                      <span class="code">{code}</span>
+                    </label>
+                  {/each}
+                </div>
+              </div>
+            {:else}
+              <div class="row">
+                <span class="hint">
+                  No spelling dictionaries are installed. Install one for your language, for example
+                  <code>sudo apt install hunspell-en-us</code> (Fedora: <code>sudo dnf install hunspell-en</code>), then reopen TuxNotes.
+                </span>
+              </div>
+            {/if}
+          {/if}
+        </div>
+
+        <h3 class="subhead">Updates</h3>
+        <div class="group">
+          <label class="row">
+            <div class="label">
+              <span>Check for new versions</span>
+              <span class="hint">
+                Once a day, TuxNotes asks GitHub whether a newer version is out. Nothing else is sent.
+                {#if identity.dev}TuxNotes Dev doesn't check by itself.{/if}
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              class="switch"
+              checked={prefs.checkUpdates}
+              onchange={(e) => prefs.set("checkUpdates", e.currentTarget.checked)}
+            />
+          </label>
+          <div class="row">
+            <div class="label">
+              <span class="update-status" role="status">
+                {#if updates.checking}
+                  Checking…
+                {:else if updates.error}
+                  {updates.error}
+                {:else if updates.newer}
+                  TuxNotes {updates.newer.latest} is out.
+                {:else if updates.info}
+                  You're up to date ({identity.version}).
+                {:else}
+                  Not checked yet.
+                {/if}
+              </span>
+              {#if updates.lastCheck}
+                <span class="hint">Last checked: {formatRelativeDateTime(updates.lastCheck)}</span>
+              {/if}
+            </div>
+            {#if updates.newer && !updates.checking}
+              <button class="btn" onclick={() => updates.openReleasePage().catch((e) => app.showError(`Couldn't open the browser: ${e}`))}>Get It</button>
+            {/if}
+            <button class="btn" disabled={updates.checking} onclick={() => updates.check()}>Check Now</button>
+          </div>
+        </div>
+
         <h3 class="subhead">Locked Notes</h3>
         <div class="group">
           <div class="row">
@@ -306,10 +406,18 @@
 
       {:else if section === "about"}
         <div class="about">
-          <img src="/icon.png" alt="" width="72" height="72" />
-          <h2>TuxNotes</h2>
-          <p class="tagline">Open notes for Linux</p>
+          <img src={identity.dev ? "/icon-dev.png" : "/icon.png"} alt="" width="72" height="72" />
+          <h2>{info?.name ?? identity.name}</h2>
+          <p class="tagline">
+            {info?.dev ? "Test build with its own notes. Your TuxNotes notes aren't touched." : "Open notes for Linux"}
+          </p>
           <p class="muted">Version {info?.version ?? "…"} · MIT License</p>
+          {#if updates.newer}
+            <p class="about-update">
+              TuxNotes {updates.newer.latest} is out.
+              <button class="link" onclick={() => updates.openReleasePage().catch((e) => app.showError(`Couldn't open the browser: ${e}`))}>Get it</button>
+            </p>
+          {/if}
           <div class="about-actions">
             <button class="btn" onclick={openRepo}>GitHub</button>
             <button class="btn" disabled={!info} onclick={openNotesFolder}>Open Notes Folder</button>
@@ -446,6 +554,41 @@
   .hint {
     font-size: 12px;
     color: var(--text-secondary);
+  }
+  .languages {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 2px 12px;
+    margin-top: 8px;
+  }
+  .language {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 0;
+    min-width: 0;
+  }
+  .language input {
+    accent-color: var(--accent);
+    width: 15px;
+    height: 15px;
+    flex: none;
+  }
+  .language .code {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+  .about-update {
+    margin: 4px 0 0;
+    font-weight: 500;
+  }
+  .link {
+    color: var(--accent-strong);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   .subhead {
     margin: 22px 0 8px;

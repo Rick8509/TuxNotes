@@ -6,6 +6,11 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import type {
   AppInfo,
+  FileEntry,
+  FileStatus,
+  TextFile,
+  UpdateInfo,
+  SpellingInfo,
   AttachResult,
   Attachment,
   AutoBackup,
@@ -90,10 +95,35 @@ export const api = {
   googleCancelSignIn: () => call<void>("google_cancel_sign_in"),
   googleSignOut: () => call<BackupStatus>("google_sign_out"),
   backupNow: () => call<BackupInfo>("backup_now"),
-  listBackups: () => call<BackupInfo[]>("list_backups"),
-  restoreBackup: (id: string, password?: string) => call<RestoreResult>("restore_backup", { id, password: password ?? null }),
+  /** Backups in the backup place, or in `folder` (to restore from). */
+  listBackups: (folder?: string) => call<BackupInfo[]>("list_backups", { folder: folder ?? null }),
+  restoreBackup: (id: string, password?: string, folder?: string) =>
+    call<RestoreResult>("restore_backup", { id, password: password ?? null, folder: folder ?? null }),
+  /** Back up to a folder (a "TuxNotes Backups" folder is made in it); null stops. */
+  setBackupFolder: (folder: string | null) => call<BackupStatus>("set_backup_folder", { folder }),
+  /** The folder dialog; null when cancelled. */
+  pickBackupFolder: (purpose: "backup" | "restore") => call<string | null>("pick_backup_folder", { purpose }),
 
   appInfo: () => call<AppInfo>("app_info"),
+
+  spellingInfo: () => call<SpellingInfo>("spelling_info"),
+  /** Ask GitHub for the latest release (Settings → Updates). */
+  checkForUpdate: () => call<UpdateInfo>("check_for_update"),
+
+  // Files window (text and code files, see src-tauri/src/files.rs)
+  takePendingFiles: () => call<FileEntry[]>("take_pending_files"),
+  readTextFile: (id: string) => call<TextFile>("read_text_file", { id }),
+  /** Pick files and open them in the Files window. Returns how many were chosen. */
+  openFileDialog: () => call<number>("open_file_dialog"),
+  fileStatus: (id: string) => call<FileStatus>("file_status", { id }),
+  /** Fails with CHANGED_ON_DISK (unless `force`) or UNMAPPABLE; see types.ts. */
+  saveTextFile: (id: string, text: string, encoding: string, lineEnding: string, expectedModified: number | null, force = false) =>
+    call<TextFile>("save_text_file", { id, text, encoding, lineEnding, expectedModified, force }),
+  /** Save under a name chosen in the dialog; null when cancelled. */
+  saveTextFileAs: (id: string, text: string, encoding: string, lineEnding: string) =>
+    call<TextFile | null>("save_text_file_as", { id, text, encoding, lineEnding }),
+  /** Returns the languages actually in use (empty `languages`: the desktop's language). */
+  setSpelling: (enabled: boolean, languages: string[]) => call<string[]>("set_spelling", { enabled, languages }),
 
   /** Add a pasted or dropped file to a note. The bytes go over IPC as raw binary. */
   async addAttachment(noteId: string, file: File): Promise<Attachment> {
@@ -107,6 +137,18 @@ export const api = {
           "x-mime": encodeURIComponent(file.type || ""),
         },
       });
+    } catch (err) {
+      throw new Error(typeof err === "string" ? err : String((err as Error)?.message ?? err));
+    }
+  },
+  /** An image attachment's bytes (for Edit Image…). */
+  async attachmentImage(id: string): Promise<ArrayBuffer> {
+    if (!isTauri) {
+      const { attachmentUrl } = await import("./attachmentUrls");
+      return (await fetch(attachmentUrl(id))).arrayBuffer();
+    }
+    try {
+      return await tauriInvoke<ArrayBuffer>("attachment_image", { id });
     } catch (err) {
       throw new Error(typeof err === "string" ? err : String((err as Error)?.message ?? err));
     }

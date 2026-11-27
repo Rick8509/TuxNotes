@@ -40,7 +40,7 @@ check("Escape on 'Replace your notes?' stays on the backup list", (await page.$e
 
 // Escape without a question still does its normal job
 await page.keyboard.press("Escape"); await sleep(200);
-check("Escape on the backup list goes back", (await page.$eval("#backup-title", (e) => e.textContent)) === "Google Drive Backup");
+check("Escape on the backup list goes back", (await page.$eval("#backup-title", (e) => e.textContent)) === "Backup");
 await page.keyboard.press("Escape"); await sleep(200);
 check("Escape then closes Settings", !(await settingsOpen()));
 

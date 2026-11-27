@@ -10,8 +10,9 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-const SERVICE: &str = "io.github.Rick8509.TuxNotes";
-/// Where secrets were stored before the app ID changed; moved on first use.
+/// Where secrets were stored before the app ID changed; the released app moves them
+/// on first use. Secrets are stored under the app ID (the keyring "service"), so
+/// TuxNotes and TuxNotes Dev never share them.
 const LEGACY_SERVICE: &str = crate::legacy_id::LEGACY_ID;
 const ACCOUNT: &str = "google-drive-refresh-token";
 /// Key derived from the backup password (never the password itself).
@@ -19,29 +20,35 @@ pub const BACKUP_KEY_ACCOUNT: &str = "backup-encryption-key";
 
 #[derive(Clone)]
 pub struct TokenVault {
+    /// The app ID.
+    service: String,
     account: &'static str,
     fallback_path: PathBuf,
 }
 
 impl TokenVault {
     /// The vault for the Google refresh token.
-    pub fn new(fallback_path: PathBuf) -> Self {
-        Self::with_account(ACCOUNT, fallback_path)
+    pub fn new(app_id: &str, fallback_path: PathBuf) -> Self {
+        Self::with_account(app_id, ACCOUNT, fallback_path)
     }
 
-    pub fn with_account(account: &'static str, fallback_path: PathBuf) -> Self {
+    pub fn with_account(app_id: &str, account: &'static str, fallback_path: PathBuf) -> Self {
         Self {
+            service: app_id.to_string(),
             account,
             fallback_path,
         }
     }
 
     fn entry(&self) -> keyring::Result<keyring::Entry> {
-        keyring::Entry::new(SERVICE, self.account)
+        keyring::Entry::new(&self.service, self.account)
     }
 
-    /// A secret saved under the old app ID: move it to the current one.
+    /// A secret saved under the old app ID: move it to the current one (released app only).
     fn take_legacy(&self) -> Option<String> {
+        if !crate::legacy_id::takes_over_legacy_data(&self.service) {
+            return None;
+        }
         let legacy = keyring::Entry::new(LEGACY_SERVICE, self.account).ok()?;
         let secret = legacy.get_password().ok()?;
         if self.entry().and_then(|e| e.set_password(&secret)).is_ok() {
@@ -89,7 +96,9 @@ impl TokenVault {
             Ok(()) | Err(keyring::Error::NoEntry) => {}
             Err(e) => log::warn!("could not remove {} from keyring: {e}", self.account),
         }
-        if let Ok(legacy) = keyring::Entry::new(LEGACY_SERVICE, self.account) {
+        if crate::legacy_id::takes_over_legacy_data(&self.service)
+            && let Ok(legacy) = keyring::Entry::new(LEGACY_SERVICE, self.account)
+        {
             let _ = legacy.delete_credential();
         }
         let _ = fs::remove_file(&self.fallback_path);

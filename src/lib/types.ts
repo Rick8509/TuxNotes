@@ -79,6 +79,10 @@ export interface BackupStatus {
   encrypted: boolean;
   /** Back up (if anything changed) when TuxNotes closes. */
   backupOnClose: boolean;
+  /** Backups go to this folder instead of Google Drive. */
+  backupFolder: string | null;
+  /** The folder is there right now (a USB drive may be unplugged). */
+  folderAvailable: boolean;
 }
 
 export interface BackupInfo {
@@ -103,7 +107,61 @@ export interface RestoreResult {
   safetyCopy: string;
 }
 
+// ------------------------------------------------------------- Files window
+// Mirrors src-tauri/src/files.rs.
+
+/** A file the user opened (from "Open With", the Open dialog, a drop or the command line). */
+export interface FileEntry {
+  id: string;
+  path: string;
+  name: string;
+}
+
+export interface TextFile extends FileEntry {
+  text: string;
+  /** "UTF-8", "UTF-8 with BOM", "UTF-16 LE", "UTF-16 BE" or "Windows-1252". */
+  encoding: string;
+  lineEnding: "LF" | "CRLF" | "CR";
+  /** No permission to save it. */
+  readOnly: boolean;
+  size: number;
+  /** Last modified, Unix ms. */
+  modified: number;
+}
+
+/** Where an open file stands on disk (to notice changes by other programs). */
+export interface FileStatus {
+  exists: boolean;
+  modified: number;
+  size: number;
+}
+
+/** Errors from saving that the Files window handles itself (see src-tauri/src/files.rs). */
+export const CHANGED_ON_DISK = "CHANGED_ON_DISK";
+export const UNMAPPABLE = "UNMAPPABLE";
+
+/** The latest TuxNotes release (see src-tauri/src/updates.rs). */
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  newer: boolean;
+  /** Its release page. */
+  url: string;
+}
+
+/** Spelling dictionaries installed on this computer (see src-tauri/src/spelling.rs). */
+export interface SpellingInfo {
+  /** e.g. ["de_DE", "en_US"] */
+  available: string[];
+  /** The desktop's language, used when no language was chosen. */
+  systemDefault: string[];
+}
+
 export interface AppInfo {
+  /** "TuxNotes", or "TuxNotes Dev" for test builds. */
+  name: string;
+  /** A TuxNotes Dev build: its own app ID, notes and settings. */
+  dev: boolean;
   version: string;
   dataDir: string;
   database: string;

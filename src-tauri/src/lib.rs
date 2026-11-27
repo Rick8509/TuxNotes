@@ -1,11 +1,16 @@
 mod attachments;
+mod backup_folder;
 mod backup_service;
 mod commands;
 mod credentials;
 mod export;
+mod files;
 mod google_client;
+mod identity;
 mod legacy_id;
 mod settings;
+mod spelling;
+mod updates;
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -40,22 +45,42 @@ pub fn run() {
         return;
     }
 
+    // Files given on the command line ("Open With TuxNotes", `tuxnotes notes.txt`) open in
+    // the Files window; the notes window then stays hidden until asked for.
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let startup_files = files::paths_from_args(&std::env::args().collect::<Vec<_>>(), &cwd);
+    let started_for_files = !startup_files.is_empty();
+
     tauri::Builder::default()
-        // Must be first: a second launch just focuses the running window.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
+        // Must be first: a second launch opens its files here, or shows the notes window.
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            let paths = files::paths_from_args(&args, std::path::Path::new(&cwd));
+            if paths.is_empty() {
+                files::show_notes_window(app);
+            } else {
+                files::open_paths(app, paths);
             }
         }))
-        // Remember window size, position and maximized state between launches.
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Remember window size, position and maximized state between launches. Not whether
+        // a window was visible: the notes window starts hidden and is shown in RunEvent::Ready.
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        - tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         // Serves note images/files to the editor by id (see attachments.rs).
         .register_asynchronous_uri_scheme_protocol("attachment", attachments::handle_protocol)
-        .setup(|app| {
+        .on_window_event(files::on_window_event)
+        .setup(move |app| {
+            app.manage(files::OpenFiles::default());
+            if started_for_files {
+                files::open_paths(app.handle(), startup_files.clone());
+            }
             // ~/.local/share/<identifier>/notes.db and ~/.config/<identifier>/settings.json
             let data_dir = app.path().app_data_dir()?;
             let config_dir = app.path().app_config_dir()?;
@@ -85,6 +110,7 @@ pub fn run() {
                 Err(e) => log::warn!("could not clean up attachments: {e}"),
             }
             let backup = BackupService::new(
+                &app.config().identifier,
                 data_dir,
                 config_dir,
                 db_path,
@@ -140,11 +166,23 @@ pub fn run() {
             commands::backup_now,
             commands::list_backups,
             commands::restore_backup,
+            commands::set_backup_folder,
+            commands::pick_backup_folder,
             commands::app_info,
+            files::take_pending_files,
+            files::read_text_file,
+            files::open_file_dialog,
+            files::file_status,
+            files::save_text_file,
+            files::save_text_file_as,
+            spelling::spelling_info,
+            spelling::set_spelling,
+            updates::check_for_update,
             attachments::add_attachment,
             attachments::attach_files,
             attachments::paste_from_clipboard,
             attachments::open_attachment,
+            attachments::attachment_image,
             attachments::save_attachment_as,
             export::export_markdown,
             export::pick_markdown_files,
@@ -152,8 +190,17 @@ pub fn run() {
             export::print_note,
             export::export_pdf,
         ])
-        .run(context)
-        .expect("error while running TuxNotes");
+        .build(context)
+        .expect("error while starting TuxNotes")
+        .run(move |app, event| {
+            // The notes window starts hidden (tauri.conf.json) so that opening a file shows
+            // only the Files window.
+            if let tauri::RunEvent::Ready = event
+                && !started_for_files
+            {
+                files::show_notes_window(app);
+            }
+        });
 }
 
 /// Background loop that runs automatic backups when they're due.
